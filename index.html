@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#f2f1e7" />
+    <meta
+      name="description"
+      content="Tank 1990 — 一场关于勇气与守护的经典坦克战役。Three.js 3D 俯视角坦克大战。"
+    />
+    <title>TANK / 1990 — 最后一道防线</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="site-header">
+        <a class="wordmark" href="./" aria-label="Tank 1990 首页">
+          <span class="brand-emblem" aria-hidden="true"
+            ><i></i><i></i><i></i
+          ></span>
+          <span
+            >TANK<span class="brand-slash">/</span>1990<span class="brand-dot"
+              >®</span
+            ></span
+          >
+        </a>
+        <div class="header-designation">
+          <span>CLASSIC REIMAGINED</span><span>经典战役 · 立体重现</span>
+        </div>
+        <div class="header-actions">
+          <span class="system-online"><i></i> SYSTEM ONLINE</span>
+          <button
+            id="sound-btn"
+            class="icon-button"
+            aria-label="切换音效"
+            title="音效"
+            aria-pressed="false"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
+            >
+              <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+              <path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+            </svg>
+          </button>
+          <button
+            id="pause-btn"
+            class="icon-button"
+            aria-label="暂停游戏"
+            title="暂停 / 继续 (P)"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="5" width="4" height="14" rx=".5" />
+              <rect x="14" y="5" width="4" height="14" rx=".5" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <div class="page-heading">
+          <div class="eyebrow">
+            <span class="orange-square"></span> FIELD OPERATIONS
+            <span class="heading-divider">/</span> 防御作战
+          </div>
+          <span class="edition">EST. 1990 <span>—</span> REBUILT IN 3D</span>
+        </div>
+        <div class="command-layout">
+          <section class="arena-panel" aria-label="坦克大战战场">
+            <div class="operation-bar">
+              <div class="operation-name">
+                <span class="operation-cross">✳</span><strong>前线阵地</strong
+                ><span>THE BATTLEFIELD</span>
+              </div>
+              <div class="operation-status">
+                <span class="live-dot"></span><span id="status-label">待命</span
+                ><span class="bar-divider"></span
+                ><span id="elapsed">00:00</span>
+              </div>
+            </div>
+            <div class="field-wrap">
+              <div class="field-coordinate coordinate-top">
+                N <span>↑</span>
+              </div>
+              <div class="field-coordinate coordinate-bottom">
+                SECTOR 01 / 26 × 26
+              </div>
+              <div
+                id="battlefield"
+                aria-label="3D 坦克战场，使用 WASD 移动，空格射击"
+                tabindex="0"
+              ></div>
+              <div id="overlay" class="game-overlay" hidden>
+                <div class="overlay-panel">
+                  <span class="overlay-kicker"
+                    >TANK / 1990 — FIELD COMMAND</span
+                  >
+                  <div class="overlay-insignia" aria-hidden="true">✳</div>
+                  <h1 id="overlay-title">指挥官，准备出击</h1>
+                  <p id="overlay-copy">
+                    守护基地，击退敌军。最后一道防线，交给你了。
+                  </p>
+                  <button id="primary-btn" class="primary-button">
+                    开始战役 <span aria-hidden="true">↗</span></button
+                  ><span class="overlay-hint">WASD 移动 · SPACE 射击</span>
+                </div>
+              </div>
+            </div>
+            <div class="keyboard-strip">
+              <div>
+                <span class="key-group"
+                  ><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span
+                ><span> / 方向键 移动</span>
+              </div>
+              <div><kbd class="space-key">SPACE</kbd><span>射击</span></div>
+              <div class="mouse-instruction">
+                <svg
+                  viewBox="0 0 16 20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="1" width="10" height="17" rx="5" />
+                  <path d="M8 1v6" /></svg
+                ><span>鼠标 瞄准</span>
+              </div>
+              <div><kbd>P</kbd><span>暂停</span></div>
+            </div>
+            <div class="touch-controls" aria-label="触摸游戏控制">
+              <div class="touch-dpad">
+                <button data-control="up" aria-label="向上">↑</button
+                ><button data-control="left" aria-label="向左">←</button
+                ><button data-control="down" aria-label="向下">↓</button
+                ><button data-control="right" aria-label="向右">→</button>
+              </div>
+              <span class="touch-caption"
+                >守住阵地<br /><small>HOLD THE LINE</small></span
+              ><button data-control="fire" class="touch-fire" aria-label="射击">
+                <span>◎</span>射击
+              </button>
+            </div>
+          </section>
+
+          <aside class="mission-sidebar" aria-label="作战信息">
+            <section class="mission-intro">
+              <div class="section-label">当前战役 <span>MISSION</span></div>
+              <div class="stage-row">
+                <span class="stage-label">STAGE</span
+                ><span id="wave" class="stage-number">01</span
+                ><span class="stage-arrow" aria-hidden="true">↗</span>
+              </div>
+              <h1>守住最后一道防线<span>HOLD THE LAST LINE.</span></h1>
+              <p>
+                保卫基地，清除所有敌方坦克。<br />每一发炮弹，都为守护而战。
+              </p>
+            </section>
+            <section class="score-section">
+              <div class="section-label">战场得分 <span>SCORE</span></div>
+              <div class="score-row">
+                <strong id="score">000000</strong
+                ><span class="score-unit">PTS</span>
+              </div>
+              <div class="kill-row">
+                <span>已击毁 <b id="kills">0</b></span
+                ><span>敌军剩余 <b id="remaining">12</b></span>
+              </div>
+              <div id="enemy-roster" class="enemy-roster" aria-label="剩余敌军">
+                <i class="roster-tank"></i><i class="roster-tank"></i
+                ><i class="roster-tank"></i><i class="roster-tank"></i
+                ><i class="roster-tank"></i><i class="roster-tank"></i
+                ><i class="roster-tank"></i><i class="roster-tank"></i
+                ><i class="roster-tank"></i><i class="roster-tank"></i
+                ><i class="roster-tank"></i><i class="roster-tank"></i>
+              </div>
+            </section>
+            <section class="survival-section">
+              <div class="survival-row">
+                <span>玩家生命 <small>LIVES</small></span
+                ><strong id="lives" class="lives">♥ ♥ ♥</strong>
+              </div>
+              <div class="survival-row">
+                <span>基地状态 <small>BASE</small></span
+                ><strong id="base-status" class="base-status">完好</strong>
+              </div>
+            </section>
+            <section class="field-guide">
+              <div class="section-label">战场识别 <span>FIELD GUIDE</span></div>
+              <div class="terrain-guide">
+                <div>
+                  <i class="terrain-swatch brick"></i
+                  ><span>砖墙<small>可摧毁</small></span>
+                </div>
+                <div>
+                  <i class="terrain-swatch steel"></i
+                  ><span>钢墙<small>不可摧毁</small></span>
+                </div>
+                <div>
+                  <i class="terrain-swatch water"></i
+                  ><span>水域<small>无法通行</small></span>
+                </div>
+              </div>
+              <div class="enemy-guide">
+                <span
+                  ><i class="mini-tank light"></i>轻型
+                  <small>1 HIT</small></span
+                ><span
+                  ><i class="mini-tank heavy"></i>重型
+                  <small>3 HITS</small></span
+                ><span
+                  ><i class="mini-tank rapid"></i>速射 <small>FAST</small></span
+                >
+              </div>
+            </section>
+            <div class="briefing">
+              <span class="briefing-icon" aria-hidden="true">↳</span>
+              <p>
+                善用掩体，留意基地。<br /><span>最好的进攻，是守住希望。</span>
+              </p>
+            </div>
+            <button id="restart-btn" class="restart-button">
+              <span>↻</span> 重新部署 <small>RESTART</small>
+            </button>
+          </aside>
+        </div>
+      </main>
+      <footer class="site-footer">
+        <span><i class="footer-cross">✳</i> BUILT FOR THE DEFENDERS.</span
+        ><span
+          >一代经典 · 再次出发 <i class="footer-separator">/</i> THREE.JS
+          EXPERIENCE</span
+        ><span class="footer-version"
+          >V.1.0 <span class="orange-square"></span
+        ></span>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
