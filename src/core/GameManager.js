@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { STEP, seededRandom } from "./config.js";
+import { LEVELS, STEP, seededRandom } from "./config.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
 import { PlayerTank, EnemyTank } from "../entities/Tank.js";
@@ -8,24 +8,13 @@ import { BulletManager } from "../systems/BulletManager.js";
 import { Effects } from "../systems/Effects.js";
 import { AudioSystem } from "../systems/AudioSystem.js";
 
-const SEQUENCE = [
-  "light",
-  "light",
-  "heavy",
-  "light",
-  "rapid",
-  "light",
-  "heavy",
-  "rapid",
-  "light",
-  "heavy",
-  "rapid",
-  "heavy",
-];
 export class GameManager {
   constructor(container) {
     this.container = container;
     this.state = "ready";
+    this.levelIndex = 0;
+    this.levelConfig = LEVELS[0];
+    this.levelScoreStart = 0;
     this.rng = seededRandom();
     this.time = 0;
     this.accumulator = 0;
@@ -84,6 +73,8 @@ export class GameManager {
         "base-status",
         "wave",
         "elapsed",
+        "mission-title",
+        "mission-copy",
         "enemy-roster",
         "status-label",
         "pause-btn",
@@ -99,6 +90,8 @@ export class GameManager {
       this.audio.unlock();
       if (this.state === "ready") this.start();
       else if (this.state === "paused") this.togglePause();
+      else if (this.state === "level-clear") this.advanceLevel();
+      else if (this.state === "won") this.newCampaign();
       else this.restart();
     });
     this.ui["pause-btn"].addEventListener("click", () => this.togglePause());
@@ -127,7 +120,10 @@ export class GameManager {
   get tanks() {
     return [this.player, ...this.enemies].filter((t) => t && t.alive);
   }
-  reset() {
+  reset(levelIndex = this.levelIndex, preserveCampaign = true) {
+    const nextLevel = Math.max(0, Math.min(levelIndex, LEVELS.length - 1));
+    this.levelIndex = nextLevel;
+    this.levelConfig = LEVELS[nextLevel];
     this.input.clear();
     this.input.mouseAim = false;
     this.input.target = null;
@@ -136,13 +132,13 @@ export class GameManager {
     if (this.player) this.player.dispose();
     for (const e of this.enemies || []) e.dispose();
     if (this.map) this.map.dispose();
-    this.rng = seededRandom(1990);
-    this.map = new MapManager(this.scene);
+    this.rng = seededRandom(1990 + nextLevel * 997);
+    this.map = new MapManager(this.scene, this.levelConfig.map);
     this.enemies = [];
     this.collision = new CollisionSystem(this.map, () => this.tanks);
     this.player = new PlayerTank(this, 9.5, 23.5);
     this.lives = 3;
-    this.score = 0;
+    this.score = preserveCampaign ? this.levelScoreStart : 0;
     this.kills = 0;
     this.spawned = 0;
     this.spawnTimer = 1.8;
@@ -155,7 +151,7 @@ export class GameManager {
     this.updateUI();
   }
   spawnEnemy(gate) {
-    if (this.spawned >= SEQUENCE.length) return false;
+    if (this.spawned >= this.levelConfig.sequence.length) return false;
     const gates = [2.5, 12.5, 23.5];
     const order =
       gate === undefined
@@ -170,7 +166,9 @@ export class GameManager {
         )
       )
         continue;
-      this.enemies.push(new EnemyTank(this, SEQUENCE[this.spawned], x, z));
+      this.enemies.push(
+        new EnemyTank(this, this.levelConfig.sequence[this.spawned], x, z),
+      );
       this.spawned++;
       return true;
     }
@@ -184,7 +182,7 @@ export class GameManager {
     this.updateUI();
   }
   restart() {
-    this.reset();
+    this.reset(this.levelIndex, true);
     this.state = "playing";
     this.setOverlay();
     this.audio.play("start");
@@ -205,6 +203,32 @@ export class GameManager {
     this.setOverlay(this.state, reason);
     this.updateUI();
   }
+  completeLevel() {
+    this.state = "level-clear";
+    this.input.clear();
+    this.setOverlay(
+      "level-clear",
+      `第 ${this.levelConfig.number} 关已清除。准备进入 ${this.levelIndex + 2} 关。`,
+    );
+    this.updateUI();
+  }
+  advanceLevel() {
+    if (this.levelIndex >= LEVELS.length - 1) return;
+    this.levelScoreStart = this.score;
+    this.reset(this.levelIndex + 1, true);
+    this.state = "playing";
+    this.audio.play("start");
+    this.setOverlay();
+    this.updateUI();
+  }
+  newCampaign() {
+    this.levelScoreStart = 0;
+    this.reset(0, false);
+    this.state = "playing";
+    this.audio.play("start");
+    this.setOverlay();
+    this.updateUI();
+  }
   onTankDestroyed(tank) {
     if (tank.team === "player") {
       this.lives--;
@@ -214,8 +238,13 @@ export class GameManager {
     } else {
       this.score += tank.score;
       this.kills++;
-      if (this.kills === SEQUENCE.length)
-        this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
+      const total = this.levelConfig?.sequence.length ?? 12;
+      if (this.kills >= total) {
+        if (this.levelConfig && this.levelIndex < LEVELS.length - 1)
+          this.completeLevel();
+        else
+          this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
+      }
     }
     this.updateUI();
   }
@@ -225,13 +254,18 @@ export class GameManager {
     const content = {
       ready: [
         "指挥官，准备出击",
-        "保卫金色老鹰基地，击退 12 辆敌军坦克。你有 3 次机会，守住这片阵地。",
+        `第 ${this.levelConfig.number} 关 · ${this.levelConfig.objective} 你有 3 次机会，守住这片阵地。`,
         "开始战役 ↗",
       ],
       paused: [
         "战役已暂停",
         "喘口气，观察战场。准备好后继续守护基地。",
         "继续战役 ↗",
+      ],
+      "level-clear": [
+        `第 ${this.levelConfig.number} 关完成`,
+        "",
+        `进入第 ${this.levelIndex + 2} 关 ↗`,
       ],
       won: ["阵地守住了", "", "再次出击 ↗"],
       lost: ["防线失守", "", "重新部署 ↗"],
@@ -241,23 +275,29 @@ export class GameManager {
     this.ui["primary-btn"].textContent = content[2];
   }
   updateUI() {
+    const total = this.levelConfig.sequence.length;
     this.ui.score.textContent = String(this.score).padStart(6, "0");
     this.ui.kills.textContent = this.kills;
-    this.ui.remaining.textContent = 12 - this.kills;
+    this.ui.remaining.textContent = total - this.kills;
     this.ui.lives.textContent =
       "♥ ".repeat(this.lives) + "♡ ".repeat(3 - this.lives);
     this.ui["base-status"].textContent = this.map.base.alive
       ? "完好"
       : "已摧毁";
     this.ui["base-status"].style.color = this.map.base.alive ? "" : "#a24e38";
-    this.ui.wave.textContent = "01";
+    this.ui.wave.textContent = String(this.levelConfig.number).padStart(2, "0");
     this.ui["status-label"].textContent = {
       ready: "待命",
       playing: "作战中",
       paused: "已暂停",
+      "level-clear": "关卡完成",
       won: "任务完成",
       lost: "防线失守",
     }[this.state];
+    this.ui["mission-title"].childNodes[0].textContent = this.levelConfig.name;
+    this.ui["mission-title"].querySelector("span").textContent =
+      this.levelConfig.english;
+    this.ui["mission-copy"].textContent = this.levelConfig.briefing;
     this.ui["pause-btn"].setAttribute(
       "aria-label",
       this.state === "paused" ? "继续游戏" : "暂停游戏",
@@ -267,13 +307,13 @@ export class GameManager {
       String(this.state === "paused"),
     );
     this.ui["enemy-roster"].innerHTML = Array.from(
-      { length: 12 },
+      { length: total },
       (_, i) =>
         `<i class="roster-tank${i < this.kills ? " destroyed" : ""}" aria-hidden="true"></i>`,
     ).join("");
     this.ui["enemy-roster"].setAttribute(
       "aria-label",
-      `剩余 ${12 - this.kills} 辆敌军`,
+      `第 ${this.levelConfig.number} 关剩余 ${total - this.kills} 辆敌军`,
     );
   }
   tick(dt) {
@@ -305,8 +345,11 @@ export class GameManager {
       }
     }
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0 && this.enemies.length < 4) {
-      if (this.spawnEnemy()) this.spawnTimer = 4.5;
+    if (
+      this.spawnTimer <= 0 &&
+      this.enemies.length < this.levelConfig.maxConcurrent
+    ) {
+      if (this.spawnEnemy()) this.spawnTimer = this.levelConfig.spawnInterval;
       else this.spawnTimer = 0.6;
     }
     this.effects.tick(dt);
@@ -340,7 +383,11 @@ export class GameManager {
           break;
         }
       }
-    } else if (this.state === "won" || this.state === "lost")
+    } else if (
+      this.state === "won" ||
+      this.state === "lost" ||
+      this.state === "level-clear"
+    )
       this.effects.tick(dt);
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame((t) => this.frame(t));
@@ -348,6 +395,10 @@ export class GameManager {
   snapshot() {
     return {
       state: this.state,
+      level: this.levelConfig.number,
+      levelName: this.levelConfig.name,
+      levelIndex: this.levelIndex,
+      levelTotal: LEVELS.length,
       time: this.time,
       score: this.score,
       kills: this.kills,

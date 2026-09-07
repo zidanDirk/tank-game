@@ -25,5 +25,7 @@ Implement game modules, integrate UI, build, run collision and browser checks, c
 ## Completed
 All requested core systems implemented. UI integrated, production build generated. 19 core tests pass. Browser input/combat/pause/fail/retry/win/touch/audio checks pass; zero runtime or network errors. Screenshots and 3-frame unpaused motion evidence captured. Details: final-evidence.md and browser-smoke.json.
 
+Three-stage campaign added: Stage 1 `training` (12 enemies, brick lanes), Stage 2 `crossfire` (15 enemies, cross water and steel), Stage 3 `citadel` (18 enemies, tighter steel/brick corridors). Score carries forward; each stage resets lives and retries restore the stage-start score. Stage clear is an explicit state; only Stage 3 produces the final win state.
+
 ## Remaining
 No blocking defects identified. Optional future scope: multi-stage maps, powerups, smarter pathfinding, persistent best score. Physical mobile GPU performance remains unmeasured.

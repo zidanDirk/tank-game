@@ -10,8 +10,9 @@ import {
 } from "./models.js";
 
 export class MapManager {
-  constructor(scene) {
+  constructor(scene, level = "training") {
     this.scene = scene;
+    this.level = level;
     this.root = new THREE.Group();
     scene.add(this.root);
     this.cells = new Uint8Array(SIZE * SIZE);
@@ -34,6 +35,59 @@ export class MapManager {
     for (let j = z; j < z + h; j++)
       for (let i = x; i < x + w; i++) this.set(i, j, type);
   }
+  applyLayout() {
+    const brick = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.BRICK);
+    const steel = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.STEEL);
+    const water = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.WATER);
+
+    if (this.level === "crossfire") {
+      for (const x of [2, 6, 16, 20, 23]) {
+        brick(x, 4, x === 23 ? 1 : 2, 3);
+        brick(x, 16, x === 23 ? 1 : 2, 3);
+      }
+      water(3, 9, 5, 2);
+      water(18, 9, 5, 2);
+      water(8, 13, 2, 5);
+      water(16, 13, 2, 5);
+      steel(11, 6, 4, 2);
+      steel(11, 12, 2, 3);
+      steel(14, 12, 2, 3);
+      steel(4, 20, 2, 1);
+      steel(20, 20, 2, 1);
+    } else if (this.level === "citadel") {
+      for (const x of [2, 6, 10, 16, 20, 23]) {
+        brick(x, 5, x === 23 ? 1 : 2, 3);
+        brick(x, 15, x === 23 ? 1 : 2, 3);
+      }
+      brick(3, 9, 5, 1);
+      brick(18, 9, 5, 1);
+      brick(3, 12, 4, 1);
+      brick(19, 12, 4, 1);
+      steel(9, 8, 2, 4);
+      steel(15, 8, 2, 4);
+      steel(10, 14, 2, 3);
+      steel(14, 14, 2, 3);
+      steel(4, 20, 3, 1);
+      steel(19, 20, 3, 1);
+      water(11, 9, 1, 3);
+      water(14, 9, 1, 3);
+    } else {
+      for (const x of [3, 7, 11, 15, 19, 22]) {
+        brick(x, 5, x === 22 ? 1 : 2, 4);
+        brick(x, 16, x === 22 ? 1 : 2, 4);
+      }
+      water(3, 11, 5, 2);
+      water(18, 11, 5, 2);
+      steel(10, 11, 2, 2);
+      steel(14, 11, 2, 2);
+      steel(4, 21, 2, 1);
+      steel(20, 21, 2, 1);
+    }
+    brick(11, 21, 4, 1);
+    brick(11, 22, 1, 2);
+    brick(14, 22, 1, 2);
+    this.rectangle(12, 22, 2, 2, CELL.BASE);
+  }
   build() {
     for (let n = 0; n < SIZE; n++) {
       this.set(n, 0, CELL.STEEL);
@@ -41,19 +95,7 @@ export class MapManager {
       this.set(0, n, CELL.STEEL);
       this.set(25, n, CELL.STEEL);
     }
-    for (const x of [3, 7, 11, 15, 19, 22]) {
-      this.rectangle(x, 5, x === 22 ? 1 : 2, 4, CELL.BRICK);
-      this.rectangle(x, 16, x === 22 ? 1 : 2, 4, CELL.BRICK);
-    }
-    for (const x of [3, 18]) this.rectangle(x, 11, 5, 2, CELL.WATER);
-    this.rectangle(10, 11, 2, 2, CELL.STEEL);
-    this.rectangle(14, 11, 2, 2, CELL.STEEL);
-    this.rectangle(4, 21, 2, 1, CELL.STEEL);
-    this.rectangle(20, 21, 2, 1, CELL.STEEL);
-    this.rectangle(11, 21, 4, 1, CELL.BRICK);
-    this.rectangle(11, 22, 1, 2, CELL.BRICK);
-    this.rectangle(14, 22, 1, 2, CELL.BRICK);
-    this.rectangle(12, 22, 2, 2, CELL.BASE);
+    this.applyLayout();
     this.base = { x: 13, z: 23, alive: true };
     const foundation = merged(
       this.root,

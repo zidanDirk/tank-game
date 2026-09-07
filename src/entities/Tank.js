@@ -50,8 +50,8 @@ export class Tank {
       this.team === "player"
         ? this.cooldown
         : this.type === "rapid"
-          ? 0.7 + this.game.rng() * 0.35
-          : 1.5 + this.game.rng() * 1.5;
+          ? this.cooldown * (0.7 + this.game.rng() * 0.35)
+          : this.cooldown * (0.7 + this.game.rng() * 0.7);
     this.game.bullets.fire(this);
     this.model.turret.position.z = 0.09;
     if (this.team === "player") this.game.audio.play("shoot");
@@ -123,6 +123,9 @@ export class PlayerTank extends Tank {
 export class EnemyTank extends Tank {
   constructor(game, type, x, z) {
     super(game, type, x, z);
+    const tuning = game.levelConfig ?? {};
+    this.speed *= tuning.speedMultiplier ?? 1;
+    this.cooldown *= tuning.fireMultiplier ?? 1;
     this.think = 1;
     this.cooldownLeft = 1.5 + game.rng() * 1.5;
   }

@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
     "test:browser": "node tests/browser-check.mjs",
+    "test:levels": "node tests/levels-check.mjs",
     "format": "prettier --write src tests index.html vite.config.js"
   },
   "dependencies": {

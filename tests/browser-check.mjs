@@ -131,13 +131,14 @@ try {
   });
   await page.keyboard.down("Space");
   await page.waitForFunction(
-    () => window.__TANK_GAME__.state === "won",
+    () => window.__TANK_GAME__.state === "level-clear",
     {},
     { timeout: 6000 },
   );
   await page.keyboard.up("Space");
   const won = await page.evaluate(() => window.__TANK_GAME__.snapshot());
   assert.equal(won.kills, 12);
+  assert.equal(won.level, 1);
   await page.screenshot({ path: "artifacts/desktop-won.png", fullPage: true });
   // Repeat restart and render to check that GPU geometry counts plateau.
   const memories = [];
