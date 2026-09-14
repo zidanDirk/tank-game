@@ -13,7 +13,15 @@ function fixture() {
     state: "playing",
     time: 4,
     tanks: [],
-    effects: { burst() {}, explode() {}, smoke() {} },
+    effects: {
+      burst() {},
+      explode() {},
+      smoke() {},
+      shake() {},
+      shakeOffset() { return { x: 0, z: 0 }; },
+      shakeReset() {},
+    },
+    scorePopup() {},
     audio: { play() {} },
     destroyed: [],
     onTankDestroyed(t) {
@@ -160,6 +168,12 @@ test("twelve scored kills win the mission; the third lost player life ends it", 
     kills: 0,
     lives: 3,
     state: "playing",
+    effects: {
+      burst() {},
+      shake() {},
+      shakeOffset() { return { x: 0, z: 0 }; },
+    },
+    scorePopup() {},
     updateUI() {},
     finish(won) {
       this.state = won ? "won" : "lost";

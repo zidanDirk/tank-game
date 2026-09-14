@@ -1,5 +1,10 @@
-import { DIRS, TYPES } from "../core/config.js";
-import { tankModel, disposeGroup } from "../world/models.js";
+import {
+  DIRS,
+  TYPES,
+  PLAYER_LEVELS,
+  PLAYER_MAX_LEVEL,
+} from "../core/config.js";
+import { tankModel, bossTankModel, disposeGroup } from "../world/models.js";
 
 export class Tank {
   constructor(game, type, x, z) {
@@ -15,10 +20,15 @@ export class Tank {
     this.aim = (this.direction * Math.PI) / 2;
     this.cooldownLeft = 0;
     this.invincible = type === "player" ? 3 : 1;
+    this.shieldLeft = 0;
     this.smokeTimer = 0;
     this.flash = 0;
-    this.model = tankModel(this.color, type);
-    this.model.root.scale.setScalar(0.85);
+    this.frozenUntil = 0;
+    if (type === "player") this.level = 1;
+    this.model =
+      type === "boss" ? bossTankModel(this.color, type) : tankModel(this.color, type);
+    if (type === "boss") this.model.root.scale.setScalar(1.2);
+    else this.model.root.scale.setScalar(0.85);
     game.scene.add(this.model.root);
     this.sync();
   }
@@ -27,7 +37,6 @@ export class Tank {
     const d = DIRS[direction];
     let x = this.x,
       z = this.z;
-    // Complete the perpendicular alignment before entering a new grid lane.
     const perpendicular = d.x ? this.z : this.x,
       center = Math.round(perpendicular - 0.5) + 0.5;
     const gap = center - perpendicular;
@@ -46,22 +55,43 @@ export class Tank {
   }
   shoot() {
     if (!this.alive || this.cooldownLeft > 0) return;
+    if (this.team === "enemy" && this.game.time < this.frozenUntil) return;
     this.cooldownLeft =
       this.team === "player"
         ? this.cooldown
         : this.type === "rapid"
           ? this.cooldown * (0.7 + this.game.rng() * 0.35)
           : this.cooldown * (0.7 + this.game.rng() * 0.7);
-    this.game.bullets.fire(this);
+    const multiShot = this.multiShot ?? 1;
+    if (multiShot === 1) {
+      this.game.bullets.fire(this);
+    } else if (multiShot === 2) {
+      this.game.bullets.fire(this, -0.06);
+      this.game.bullets.fire(this, 0.06);
+    } else if (multiShot === 3) {
+      this.game.bullets.fire(this, -0.16);
+      this.game.bullets.fire(this, 0);
+      this.game.bullets.fire(this, 0.16);
+    }
     this.model.turret.position.z = 0.09;
     if (this.team === "player") this.game.audio.play("shoot");
   }
   hit() {
     if (!this.alive || this.invincible > 0) return;
+    if (this.shieldLeft > 0) {
+      this.shieldLeft = 0;
+      this.game.effects.burst(this.x, 0.8, this.z, 0xb4d8ff, 14);
+      this.game.audio.play("shield");
+      return;
+    }
     this.hp--;
     this.flash = 0.15;
     this.game.effects.burst(this.x, 0.8, this.z, 0xffdc80, 12);
     this.game.audio.play("hit");
+    if (this.team === "player") {
+      this.game.effects.shake(180, 0.06);
+      this.game.flashDamage();
+    }
     if (this.hp <= 0) {
       this.alive = false;
       this.model.root.visible = false;
@@ -73,9 +103,25 @@ export class Tank {
   tick(dt) {
     this.cooldownLeft = Math.max(0, this.cooldownLeft - dt);
     this.invincible = Math.max(0, this.invincible - dt);
+    this.shieldLeft = Math.max(0, this.shieldLeft - dt);
     this.flash = Math.max(0, this.flash - dt);
-    this.model.paint.emissive.setHex(this.flash > 0 ? 0xf5d17a : 0x000000);
-    this.model.paint.emissiveIntensity = this.flash > 0 ? 0.8 : 0;
+    const frozen = this.game.time < this.frozenUntil;
+    const flashOn = this.flash > 0;
+    const shieldOn = this.shieldLeft > 0 && this.team === "player";
+    if (frozen) {
+      const pulse = 0.4 + 0.25 * Math.sin(this.game.time * 8);
+      this.model.paint.emissive.setHex(0x6080ff);
+      this.model.paint.emissiveIntensity = pulse;
+    } else if (flashOn) {
+      this.model.paint.emissive.setHex(0xf5d17a);
+      this.model.paint.emissiveIntensity = 0.8;
+    } else if (shieldOn) {
+      this.model.paint.emissive.setHex(0xb4d8ff);
+      this.model.paint.emissiveIntensity = 0.4 + 0.2 * Math.sin(this.game.time * 6);
+    } else {
+      this.model.paint.emissive.setHex(0x000000);
+      this.model.paint.emissiveIntensity = 0;
+    }
     this.model.ring.material.opacity =
       this.invincible > 0 ? 0.35 + Math.sin(this.game.time * 12) * 0.3 : 0.7;
     this.model.turret.position.z *= Math.exp(-dt * 20);
@@ -100,8 +146,27 @@ export class Tank {
   }
 }
 export class PlayerTank extends Tank {
-  constructor(game, x, z) {
+  constructor(game, x, z, level = 1) {
     super(game, "player", x, z);
+    this.level = Math.max(1, Math.min(level, PLAYER_MAX_LEVEL));
+    this.applyLevelStats();
+  }
+  applyLevelStats() {
+    const cfg = PLAYER_LEVELS[this.level - 1];
+    this.speed = cfg.speed;
+    this.cooldown = cfg.cooldown;
+    this.multiShot = cfg.multiShot;
+    this.breakSteel = cfg.breakSteel;
+  }
+  upgrade() {
+    if (this.level >= PLAYER_MAX_LEVEL) return false;
+    const prev = this.level;
+    this.level++;
+    this.applyLevelStats();
+    this.game.effects.burst(this.x, 0.8, this.z, 0xf3d65a, 18, 0.9);
+    this.game.audio.play("levelup");
+    this.game.showLevelBurst(this.x, this.z, prev, this.level);
+    return true;
   }
   tick(dt) {
     const input = this.game.input;
@@ -159,6 +224,10 @@ export class EnemyTank extends Tank {
     this.think = 0.7 + this.game.rng() * 2;
   }
   tick(dt) {
+    if (this.game.time < this.frozenUntil) {
+      super.tick(dt);
+      return;
+    }
     this.think -= dt;
     if (this.think <= 0) this.chooseDirection();
     if (this.invincible <= 0 && !this.move(this.direction, dt)) {
@@ -169,3 +238,5 @@ export class EnemyTank extends Tank {
     super.tick(dt);
   }
 }
+export class BossTank extends EnemyTank {}
+export class ArmorTank extends EnemyTank {}

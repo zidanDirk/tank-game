@@ -1,17 +1,40 @@
 import * as THREE from "three";
-import { LEVELS, STEP, seededRandom } from "./config.js";
+import {
+  LEVELS,
+  STEP,
+  TYPES,
+  seededRandom,
+  POWERUPS,
+  POWERUP_KEYS,
+  POWERUP_DROP_CHANCE,
+  ENDLESS,
+  MAP_PRESETS,
+  dailySeed,
+  CELL,
+  SIZE,
+} from "./config.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
-import { PlayerTank, EnemyTank } from "../entities/Tank.js";
+import {
+  PlayerTank,
+  EnemyTank,
+  BossTank,
+  ArmorTank,
+} from "../entities/Tank.js";
+import { Pickup } from "../entities/Pickup.js";
 import { CollisionSystem } from "../systems/CollisionSystem.js";
 import { BulletManager } from "../systems/BulletManager.js";
 import { Effects } from "../systems/Effects.js";
 import { AudioSystem } from "../systems/AudioSystem.js";
+import { Leaderboard } from "../systems/Leaderboard.js";
+
+const _tmpVec = new THREE.Vector3();
 
 export class GameManager {
   constructor(container) {
     this.container = container;
     this.state = "ready";
+    this.mode = "campaign";
     this.levelIndex = 0;
     this.levelConfig = LEVELS[0];
     this.levelScoreStart = 0;
@@ -20,10 +43,18 @@ export class GameManager {
     this.accumulator = 0;
     this.lastTime = 0;
     this.fps = 60;
+    this.pickups = [];
+    this.activeBuffs = new Map();
+    this.wave = 0;
+    this.modifiers = [];
+    this.endlessSeed = dailySeed();
+    this.attempt = 1;
+    this.boss = null;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xe9ecdf);
     this.camera = new THREE.OrthographicCamera(-17, 17, 17, -17, 0.1, 150);
     this.camera.position.set(13, 38, 35);
+    this.cameraBase = { x: 13, z: 35 };
     this.camera.lookAt(13, 0, 13);
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -84,15 +115,42 @@ export class GameManager {
         "overlay-title",
         "overlay-copy",
         "primary-btn",
+        "mode-campaign",
+        "mode-endless",
+        "buff-tray",
+        "boss-hp",
+        "boss-hp-fill",
+        "leaderboard",
       ].map((id) => [id, document.getElementById(id)]),
     );
+    // Damage vignette lives outside the ui map because it is queried lazily.
+    this.damageVignette = this.container?.querySelector?.(".damage-vignette") ?? null;
+    this.scoreLayer = this.container?.querySelector?.(".score-popup-layer") ?? null;
     this.ui["primary-btn"].addEventListener("click", () => {
       this.audio.unlock();
-      if (this.state === "ready") this.start();
-      else if (this.state === "paused") this.togglePause();
+      if (this.state === "ready") {
+        if (this.mode === "campaign") this.start();
+        else this.startEndless();
+      } else if (this.state === "paused") this.togglePause();
       else if (this.state === "level-clear") this.advanceLevel();
       else if (this.state === "won") this.newCampaign();
+      else if (this.state === "lost" && this.mode === "endless")
+        this.retryEndless();
       else this.restart();
+    });
+    this.ui["mode-campaign"].addEventListener("click", () => {
+      if (this.state !== "ready") return;
+      this.mode = "campaign";
+      this.ui["mode-campaign"].setAttribute("aria-pressed", "true");
+      this.ui["mode-endless"].setAttribute("aria-pressed", "false");
+      this.updateUI();
+    });
+    this.ui["mode-endless"].addEventListener("click", () => {
+      if (this.state !== "ready") return;
+      this.mode = "endless";
+      this.ui["mode-campaign"].setAttribute("aria-pressed", "false");
+      this.ui["mode-endless"].setAttribute("aria-pressed", "true");
+      this.updateUI();
     });
     this.ui["pause-btn"].addEventListener("click", () => this.togglePause());
     this.ui["restart-btn"].addEventListener("click", () => {
@@ -132,6 +190,10 @@ export class GameManager {
     if (this.player) this.player.dispose();
     for (const e of this.enemies || []) e.dispose();
     if (this.map) this.map.dispose();
+    for (const p of this.pickups || []) p.dispose();
+    this.pickups = [];
+    this.activeBuffs.clear();
+    this.boss = null;
     this.rng = seededRandom(1990 + nextLevel * 997);
     this.map = new MapManager(this.scene, this.levelConfig.map);
     this.enemies = [];
@@ -145,10 +207,82 @@ export class GameManager {
     this.respawnTimer = 0;
     this.time = 0;
     this.accumulator = 0;
-    // A readable initial enemy presence, frozen until the commander starts.
     this.spawnEnemy(0);
     this.spawnEnemy(2);
     this.updateUI();
+    this.syncBuffHud();
+  }
+  resetEndless(wave = 1) {
+    this.input.clear();
+    this.input.mouseAim = false;
+    this.input.target = null;
+    this.bullets.clear();
+    this.effects.clear();
+    if (this.player) this.player.dispose();
+    for (const e of this.enemies || []) e.dispose();
+    if (this.map) this.map.dispose();
+    for (const p of this.pickups || []) p.dispose();
+    this.pickups = [];
+    this.activeBuffs.clear();
+    this.boss = null;
+    this.wave = wave;
+    this.enemies = [];
+    this.tuningForWave(wave);
+    const preset = MAP_PRESETS[(wave - 1) % MAP_PRESETS.length];
+    this.rng = seededRandom(this.endlessSeed + this.attempt * 31 + wave * 7);
+    this.map = buildPresetMap(this.scene, preset, this.rng);
+    this.collision = new CollisionSystem(this.map, () => this.tanks);
+    this.player = new PlayerTank(this, 9.5, 23.5);
+    this.lives =
+      this.modifiers.find((m) => m.id === "iron")
+        ? 1
+        : Math.min(ENDLESS.livesMax, 3 + Math.floor((wave - 1) / 3));
+    this.score = 0;
+    this.kills = 0;
+    this.spawned = 0;
+    this.spawnTimer = 1.4;
+    this.respawnTimer = 0;
+    this.time = 0;
+    this.accumulator = 0;
+    this.spawnEnemy(0);
+    this.spawnEnemy(2);
+    this.updateUI();
+    this.syncBuffHud();
+  }
+  tuningForWave(wave) {
+    const fireMul =
+      ENDLESS.fireMultiplierBase / (1 + ENDLESS.fireMultiplierDecay * (wave - 1));
+    const speedMul = 1 + ENDLESS.speedGrowth * (wave - 1);
+    this.levelConfig = {
+      number: wave,
+      name: `无尽模式 · 第 ${wave} 波`,
+      english: "ENDLESS FRONTLINE.",
+      subtitle: "程序化地形 · 难度递增",
+      objective: "守住基地，记录最远波次。",
+      briefing: "程序化生成的阵地，敌人越来越快。每过 5 波出现 Boss。",
+      sequence: this.buildEndlessSequence(wave),
+      maxConcurrent: ENDLESS.startEnemies + Math.floor(wave / 3),
+      spawnInterval: Math.max(
+        ENDLESS.spawnIntervalMin,
+        ENDLESS.spawnIntervalBase - (wave - 1) * 0.18,
+      ),
+      speedMultiplier: speedMul,
+      fireMultiplier: fireMul,
+      map: "endless",
+      allowPowerups: true,
+      wave,
+    };
+    this.levelScoreStart = 0;
+  }
+  buildEndlessSequence(wave) {
+    const pool = ["light", "rapid"];
+    if (wave >= 2) pool.push("heavy");
+    if (wave >= ENDLESS.armorUnlockWave) pool.push("armor");
+    const sequence = [];
+    const total = 8 + wave * 2;
+    for (let i = 0; i < total; i++)
+      sequence.push(pool[Math.floor(this.rng() * pool.length)]);
+    return sequence;
   }
   spawnEnemy(gate) {
     if (this.spawned >= this.levelConfig.sequence.length) return false;
@@ -166,18 +300,41 @@ export class GameManager {
         )
       )
         continue;
-      this.enemies.push(
-        new EnemyTank(this, this.levelConfig.sequence[this.spawned], x, z),
-      );
+      const type = this.levelConfig.sequence[this.spawned];
+      const Class =
+        type === "boss"
+          ? BossTank
+          : type === "armor"
+            ? ArmorTank
+            : EnemyTank;
+      this.enemies.push(new Class(this, type, x, z));
       this.spawned++;
       return true;
     }
     return false;
   }
+  spawnBoss() {
+    if (this.boss && this.boss.alive) return;
+    const boss = new BossTank(this, "boss", 12.5, 2.5);
+    boss.maxHp = boss.hp;
+    this.boss = boss;
+    this.enemies.push(boss);
+    this.audio.play("explosion");
+    this.effects.burst(13, 1.6, 2.5, 0xffb48a, 30, 1.2);
+    this.updateUI();
+  }
   start() {
     if (this.state !== "ready") return;
     this.state = "playing";
     this.audio.play("start");
+    this.setOverlay();
+    this.updateUI();
+  }
+  startEndless() {
+    if (this.state !== "ready") return;
+    this.audio.play("start");
+    this.resetEndless(1);
+    this.state = "playing";
     this.setOverlay();
     this.updateUI();
   }
@@ -196,11 +353,71 @@ export class GameManager {
     this.setOverlay(this.state === "paused" ? "paused" : undefined);
     this.updateUI();
   }
+  flashDamage() {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    }
+    const el = this.damageVignette;
+    if (!el) return;
+    el.classList.remove("show");
+    // Force a reflow so the transition re-triggers on rapid hits.
+    void el.offsetWidth;
+    el.classList.add("show");
+    clearTimeout(this._damageTimer);
+    this._damageTimer = setTimeout(() => el.classList.remove("show"), 90);
+  }
+  showLevelBurst(x, z, from, to) {
+    const layer = this.scoreLayer;
+    if (!layer) return;
+    const v = _tmpVec.set(x, 1.2, z);
+    v.project(this.camera);
+    const cw = this.container.clientWidth;
+    const ch = this.container.clientHeight;
+    const sx = (v.x * 0.5 + 0.5) * cw;
+    const sy = (1 - (v.y * 0.5 + 0.5)) * ch;
+    const el = document.createElement("span");
+    el.className = "level-burst";
+    el.textContent = `★ ${from} → ${to}`;
+    el.style.left = `${sx}px`;
+    el.style.top = `${sy}px`;
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 650);
+  }
+  scorePopup(x, z, text, color = "#f3d65a") {
+    const layer = this.scoreLayer;
+    if (!layer) return;
+    const v = _tmpVec.set(x, 0.8, z);
+    v.project(this.camera);
+    const cw = this.container.clientWidth;
+    const ch = this.container.clientHeight;
+    const sx = (v.x * 0.5 + 0.5) * cw;
+    const sy = (1 - (v.y * 0.5 + 0.5)) * ch;
+    // Evict oldest if we have too many popups on screen.
+    while (layer.childElementCount >= 8) layer.firstElementChild?.remove();
+    const el = document.createElement("span");
+    el.className = "score-popup";
+    el.textContent = text;
+    el.style.left = `${sx}px`;
+    el.style.top = `${sy}px`;
+    el.style.setProperty("--popup-color", color);
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 1250);
+  }
   finish(won, reason) {
     if (this.state !== "playing") return;
     this.state = won ? "won" : "lost";
     this.input.clear();
     this.setOverlay(this.state, reason);
+    if (!won && this.mode === "endless") {
+      Leaderboard.add({
+        score: this.score,
+        wave: this.wave,
+        seed: this.endlessSeed,
+        date: Date.now(),
+        modifiers: this.modifiers.map((m) => m.id),
+      });
+      this.renderLeaderboard();
+    }
     this.updateUI();
   }
   completeLevel() {
@@ -222,8 +439,18 @@ export class GameManager {
     this.updateUI();
   }
   newCampaign() {
+    this.mode = "campaign";
     this.levelScoreStart = 0;
     this.reset(0, false);
+    this.state = "playing";
+    this.audio.play("start");
+    this.setOverlay();
+    this.updateUI();
+  }
+  retryEndless() {
+    this.attempt++;
+    this.endlessSeed = dailySeed();
+    this.resetEndless(1);
     this.state = "playing";
     this.audio.play("start");
     this.setOverlay();
@@ -232,30 +459,174 @@ export class GameManager {
   onTankDestroyed(tank) {
     if (tank.team === "player") {
       this.lives--;
-      if (this.lives <= 0)
-        this.finish(false, "作战坦克已全部损失。调整路线，再次守住防线。");
-      else this.respawnTimer = 1.4;
+      this.effects.shake(350, 0.1);
+      if (this.lives <= 0) {
+        const reason =
+          this.mode === "endless"
+            ? `第 ${this.wave} 波阵亡。记住这条路线，重新来过。`
+            : "作战坦克已全部损失。调整路线，再次守住防线。";
+        this.finish(false, reason);
+      } else this.respawnTimer = 1.4;
     } else {
       this.score += tank.score;
       this.kills++;
+      const colorByType = {
+        light: "#f3d65a",
+        heavy: "#e3602a",
+        rapid: "#ffb48a",
+        armor: "#a24e38",
+        boss: "#ffd700",
+      };
+      this.scorePopup(
+        tank.x,
+        tank.z,
+        `+${tank.score}`,
+        colorByType[tank.type] ?? "#f3d65a",
+      );
+      if (tank === this.boss) {
+        this.boss = null;
+        this.effects.shake(600, 0.18);
+      } else if (tank.type === "heavy" || tank.type === "armor") {
+        this.effects.shake(200, 0.08);
+      } else {
+        this.effects.shake(120, 0.04);
+      }
       const total = this.levelConfig?.sequence.length ?? 12;
       if (this.kills >= total) {
-        if (this.levelConfig && this.levelIndex < LEVELS.length - 1)
-          this.completeLevel();
-        else
-          this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
+        if (this.mode === "endless") this.advanceEndlessWave();
+        else if (this.levelIndex < LEVELS.length - 1) this.completeLevel();
+        else this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
+      }
+      if (
+        this.levelConfig?.allowPowerups &&
+        this.rng() < this.powerupChance()
+      ) {
+        this.dropPickup(tank.x, tank.z);
       }
     }
     this.updateUI();
   }
+  powerupChance() {
+    if (this.mode === "endless") return ENDLESS.powerupDropChance;
+    return POWERUP_DROP_CHANCE;
+  }
+  dropPickup(x, z) {
+    const type = POWERUP_KEYS[Math.floor(this.rng() * POWERUP_KEYS.length)];
+    this.pickups.push(new Pickup(this.scene, type, x, z, this.rng));
+    this.audio.play("pickup-spawn");
+  }
+  advanceEndlessWave() {
+    const next = this.wave + 1;
+    this.resetEndless(next);
+    this.audio.play("start");
+    if (next % ENDLESS.bossEvery === 0) this.spawnBoss();
+    this.setOverlay();
+    this.updateUI();
+  }
+  applyPickup(type) {
+    const player = this.player;
+    switch (type) {
+      case "star":
+        player.upgrade();
+        this.audio.play("powerup");
+        break;
+      case "helmet":
+        player.shieldLeft = POWERUPS.helmet.duration;
+        this.activeBuffs.set("helmet", this.time + POWERUPS.helmet.duration);
+        this.audio.play("powerup");
+        break;
+      case "clock":
+        for (const e of this.enemies) {
+          if (e.alive) e.frozenUntil = this.time + POWERUPS.clock.duration;
+        }
+        this.activeBuffs.set("clock", this.time + POWERUPS.clock.duration);
+        this.audio.play("clock");
+        break;
+      case "bomb":
+        for (const e of [...this.enemies]) {
+          if (e.alive) {
+            e.invincible = 0;
+            e.shieldLeft = 0;
+            e.hit();
+          }
+        }
+        this.effects.burst(13, 1.4, 13, 0xff7a4a, 60, 1.6);
+        this.audio.play("bomb");
+        break;
+      case "tank":
+        this.lives = Math.min(ENDLESS.livesMax, this.lives + 1);
+        this.audio.play("powerup");
+        break;
+      case "shovel":
+        this.map.fortifyBase(POWERUPS.shovel.duration, this.time);
+        this.activeBuffs.set("shovel", this.time + POWERUPS.shovel.duration);
+        this.audio.play("shovel");
+        break;
+    }
+    this.syncBuffHud();
+  }
+  syncBuffHud() {
+    if (!this.ui["buff-tray"]) return;
+    const tray = this.ui["buff-tray"];
+    tray.innerHTML = "";
+    const order = ["helmet", "clock", "shovel"];
+    for (const key of order) {
+      const expiresAt = this.activeBuffs.get(key);
+      if (!expiresAt) continue;
+      const remaining = Math.max(0, expiresAt - this.time);
+      const slot = document.createElement("span");
+      slot.className = "buff-slot" + (remaining < 2 ? " expiring" : "");
+      const colorHex = POWERUPS[key].color.toString(16).padStart(6, "0");
+      slot.style.setProperty("--buff-color", `#${colorHex}`);
+      slot.style.setProperty(
+        "--buff-progress",
+        `${(remaining / POWERUPS[key].duration) * 360}deg`,
+      );
+      slot.textContent = POWERUPS[key].glyph;
+      slot.title = `${key.toUpperCase()} ${remaining.toFixed(1)}s`;
+      tray.appendChild(slot);
+    }
+    const lvl = this.player?.level ?? 1;
+    if (lvl > 1) {
+      const slot = document.createElement("span");
+      slot.className = "buff-slot level";
+      slot.textContent = `★${lvl}`;
+      slot.title = `升级等级 ${lvl}`;
+      tray.appendChild(slot);
+    }
+  }
+  renderLeaderboard() {
+    if (!this.ui["leaderboard"]) return;
+    const top = Leaderboard.top(ENDLESS.leaderboardSize);
+    const list = this.ui["leaderboard"];
+    list.innerHTML = "";
+    list.hidden = false;
+    if (!top.length) {
+      const empty = document.createElement("li");
+      empty.className = "leaderboard-empty";
+      empty.textContent = "暂无记录。勇敢出击！";
+      list.appendChild(empty);
+      return;
+    }
+    top.forEach((entry, idx) => {
+      const li = document.createElement("li");
+      const d = new Date(entry.date);
+      const date = `${d.getMonth() + 1}/${d.getDate()}`;
+      li.innerHTML = `<span class="rank">${idx + 1}</span><span class="score">${entry.score}</span><span class="wave">W${entry.wave}</span><span class="date">${date}</span>`;
+      list.appendChild(li);
+    });
+  }
   setOverlay(state, reason) {
     this.ui.overlay.hidden = !state;
+    if (this.ui["leaderboard"]) {
+      this.ui["leaderboard"].hidden = state !== "lost" || this.mode !== "endless";
+    }
     if (!state) return;
     const content = {
       ready: [
         "指挥官，准备出击",
-        `第 ${this.levelConfig.number} 关 · ${this.levelConfig.objective} 你有 3 次机会，守住这片阵地。`,
-        "开始战役 ↗",
+        `${this.mode === "endless" ? "无尽模式" : "战役模式"} · ${this.levelConfig.objective}`,
+        this.mode === "endless" ? "开始无尽 ↗" : "开始战役 ↗",
       ],
       paused: [
         "战役已暂停",
@@ -268,25 +639,32 @@ export class GameManager {
         `进入第 ${this.levelIndex + 2} 关 ↗`,
       ],
       won: ["阵地守住了", "", "再次出击 ↗"],
-      lost: ["防线失守", "", "重新部署 ↗"],
+      lost: [
+        "防线失守",
+        reason || "重新部署。",
+        this.mode === "endless" ? "再来一次 ↗" : "重新部署 ↗",
+      ],
     }[state];
     this.ui["overlay-title"].textContent = content[0];
-    this.ui["overlay-copy"].textContent = reason || content[1];
+    this.ui["overlay-copy"].textContent = content[1];
     this.ui["primary-btn"].textContent = content[2];
   }
   updateUI() {
     const total = this.levelConfig.sequence.length;
     this.ui.score.textContent = String(this.score).padStart(6, "0");
     this.ui.kills.textContent = this.kills;
-    this.ui.remaining.textContent = total - this.kills;
+    this.ui.remaining.textContent = Math.max(0, total - this.kills);
     this.ui.lives.textContent =
-      "♥ ".repeat(this.lives) + "♡ ".repeat(3 - this.lives);
-    this.ui["base-status"].textContent = this.map.base.alive
-      ? "完好"
-      : "已摧毁";
+      "♥ ".repeat(Math.max(0, this.lives)) +
+      "♡ ".repeat(Math.max(0, ENDLESS.livesMax - this.lives));
+    this.ui["base-status"].textContent = this.map.base.alive ? "完好" : "已摧毁";
     this.ui["base-status"].style.color = this.map.base.alive ? "" : "#a24e38";
-    this.ui.wave.textContent = String(this.levelConfig.number).padStart(2, "0");
-    this.ui["status-label"].textContent = {
+    const stage =
+      this.mode === "endless"
+        ? `W${String(this.wave).padStart(2, "0")}`
+        : String(this.levelConfig.number).padStart(2, "0");
+    this.ui.wave.textContent = stage;
+    const stateText = {
       ready: "待命",
       playing: "作战中",
       paused: "已暂停",
@@ -294,9 +672,10 @@ export class GameManager {
       won: "任务完成",
       lost: "防线失守",
     }[this.state];
-    this.ui["mission-title"].childNodes[0].textContent = this.levelConfig.name;
-    this.ui["mission-title"].querySelector("span").textContent =
-      this.levelConfig.english;
+    this.ui["status-label"].textContent = stateText;
+    const titleNode = this.ui["mission-title"];
+    titleNode.childNodes[0].textContent = this.levelConfig.name;
+    titleNode.querySelector("span").textContent = this.levelConfig.english;
     this.ui["mission-copy"].textContent = this.levelConfig.briefing;
     this.ui["pause-btn"].setAttribute(
       "aria-label",
@@ -307,14 +686,33 @@ export class GameManager {
       String(this.state === "paused"),
     );
     this.ui["enemy-roster"].innerHTML = Array.from(
-      { length: total },
+      { length: Math.min(total, 12) },
       (_, i) =>
         `<i class="roster-tank${i < this.kills ? " destroyed" : ""}" aria-hidden="true"></i>`,
     ).join("");
     this.ui["enemy-roster"].setAttribute(
       "aria-label",
-      `第 ${this.levelConfig.number} 关剩余 ${total - this.kills} 辆敌军`,
+      `${this.mode === "endless" ? "无尽" : `第 ${this.levelConfig.number} 关`}剩余 ${Math.max(0, total - this.kills)} 辆敌军`,
     );
+    if (this.ui["mode-campaign"]) {
+      this.ui["mode-campaign"].setAttribute(
+        "aria-pressed",
+        String(this.mode === "campaign"),
+      );
+      this.ui["mode-endless"].setAttribute(
+        "aria-pressed",
+        String(this.mode === "endless"),
+      );
+    }
+    if (this.ui["boss-hp"]) {
+      const visible = this.boss && this.boss.alive && this.mode === "endless";
+      this.ui["boss-hp"].hidden = !visible;
+      if (visible) {
+        const maxHp = this.boss.maxHp ?? TYPES.boss.hp;
+        const fill = Math.max(0, this.boss.hp / maxHp);
+        this.ui["boss-hp-fill"].style.width = `${fill * 100}%`;
+      }
+    }
   }
   tick(dt) {
     this.time += dt;
@@ -329,6 +727,28 @@ export class GameManager {
       }
       return true;
     });
+    for (const p of this.pickups) p.tick(dt);
+    this.pickups = this.pickups.filter((p) => {
+      if (p.life <= 0) {
+        p.dispose();
+        return false;
+      }
+      if (p.tryCollect(this.player)) {
+        this.applyPickup(p.type);
+        p.dispose();
+        return false;
+      }
+      return true;
+    });
+    for (const [key, expires] of this.activeBuffs)
+      if (this.time >= expires) this.activeBuffs.delete(key);
+    this.syncBuffHud();
+    if (this.boss && this.boss.alive && this.ui["boss-hp"]) {
+      const maxHp = this.boss.maxHp ?? TYPES.boss.hp;
+      const fill = Math.max(0, this.boss.hp / maxHp);
+      this.ui["boss-hp-fill"].style.width = `${fill * 100}%`;
+    }
+    this.map.tickFortify?.(this.time);
     if (!this.player.alive && this.lives > 0) {
       this.respawnTimer -= dt;
       if (this.respawnTimer <= 0) {
@@ -389,12 +809,20 @@ export class GameManager {
       this.state === "level-clear"
     )
       this.effects.tick(dt);
+    // Apply camera shake offset before render; restore after.
+    const shake = this.effects.shakeOffset();
+    this.camera.position.x = this.cameraBase.x + shake.x;
+    this.camera.position.z = this.cameraBase.z + shake.z;
     this.renderer.render(this.scene, this.camera);
+    this.camera.position.x = this.cameraBase.x;
+    this.camera.position.z = this.cameraBase.z;
     requestAnimationFrame((t) => this.frame(t));
   }
   snapshot() {
     return {
       state: this.state,
+      mode: this.mode,
+      wave: this.wave,
       level: this.levelConfig.number,
       levelName: this.levelConfig.name,
       levelIndex: this.levelIndex,
@@ -404,11 +832,13 @@ export class GameManager {
       kills: this.kills,
       lives: this.lives,
       baseAlive: this.map.base.alive,
+      buffs: [...this.activeBuffs.keys()],
       player: {
         x: this.player.x,
         z: this.player.z,
         alive: this.player.alive,
         aim: this.player.aim,
+        level: this.player.level,
       },
       enemies: this.enemies.map((e) => ({
         type: e.type,
@@ -417,6 +847,7 @@ export class GameManager {
         hp: e.hp,
       })),
       bullets: this.bullets.items.length,
+      pickups: this.pickups.length,
       spawned: this.spawned,
       render: {
         calls: this.renderer.info.render.calls,
@@ -427,4 +858,86 @@ export class GameManager {
       },
     };
   }
+}
+
+function buildPresetMap(scene, preset, rng) {
+  const m = new MapManager(scene, "endless");
+  m.cells.fill(0);
+  m.brickInstances.clear();
+  m.steelInstances.clear();
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  if (m.bricks) {
+    for (let i = 0; i < m.bricks.count; i++) m.bricks.setMatrixAt(i, zero);
+    m.bricks.count = 0;
+    m.bricks.instanceMatrix.needsUpdate = true;
+  }
+  if (m.steelsMesh) {
+    for (let i = 0; i < m.steelsMesh.count; i++) m.steelsMesh.setMatrixAt(i, zero);
+    m.steelsMesh.count = 0;
+    m.steelsMesh.instanceMatrix.needsUpdate = true;
+  }
+  const rows = preset.rows;
+  const rotation = Math.floor(rng() * 4);
+  const mirror = rng() < 0.5;
+  for (let z = 0; z < SIZE; z++) {
+    for (let x = 0; x < SIZE; x++) {
+      const ch = rows[z][x];
+      if (ch === " ") continue;
+      let nx = x;
+      let nz = z;
+      for (let r = 0; r < rotation; r++) {
+        const tmp = nx;
+        nx = SIZE - 1 - nz;
+        nz = tmp;
+      }
+      if (mirror) nx = SIZE - 1 - nx;
+      if (nx < 0 || nx >= SIZE || nz < 0 || nz >= SIZE) continue;
+      let type = 0;
+      if (ch === "#") type = CELL.BRICK;
+      else if (ch === "S") type = CELL.STEEL;
+      else if (ch === "~") type = CELL.WATER;
+      if (type) m.cells[nz * SIZE + nx] = type;
+    }
+  }
+  // Re-stamp the outer wall so endless maps always have a steel perimeter.
+  for (let n = 0; n < SIZE; n++) {
+    m.cells[n] = CELL.STEEL;
+    m.cells[(SIZE - 1) * SIZE + n] = CELL.STEEL;
+    m.cells[n * SIZE] = CELL.STEEL;
+    m.cells[n * SIZE + (SIZE - 1)] = CELL.STEEL;
+  }
+  // Always keep base protected.
+  m.rectangle(12, 22, 2, 2, CELL.BASE);
+  m.rectangle(11, 21, 4, 1, CELL.BRICK);
+  m.rectangle(11, 22, 1, 2, CELL.BRICK);
+  m.rectangle(14, 22, 1, 2, CELL.BRICK);
+  // Resize instance meshes if the preset has more cells than the initial capacity.
+  const needBricks = m.cells.filter((t) => t === CELL.BRICK).length * 6;
+  const needSteel = m.cells.filter((t) => t === CELL.STEEL).length;
+  if (needBricks > m.bricks.instanceMatrix.count) {
+    const bigger = new THREE.InstancedMesh(
+      m.bricks.geometry,
+      m.bricks.material,
+      needBricks,
+    );
+    bigger.copy(m.bricks);
+    m.root.remove(m.bricks);
+    m.bricks.dispose?.();
+    m.bricks = bigger;
+    m.root.add(bigger);
+  }
+  if (needSteel > m.steelsMesh.instanceMatrix.count) {
+    const bigger = new THREE.InstancedMesh(
+      m.steelsMesh.geometry,
+      m.steelsMesh.material,
+      needSteel,
+    );
+    bigger.copy(m.steelsMesh);
+    m.root.remove(m.steelsMesh);
+    m.steelsMesh.dispose?.();
+    m.steelsMesh = bigger;
+    m.root.add(bigger);
+  }
+  m.rebuildInstances();
+  return m;
 }

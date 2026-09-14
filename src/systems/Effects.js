@@ -25,6 +25,7 @@ export class Effects {
     this.points.frustumCulled = false;
     scene.add(this.points);
     this.wrecks = [];
+    this.shakeState = { mag: 0, duration: 0, time: 0, ox: 0, oz: 0 };
   }
   burst(x, y, z, color, count = 15, life = 0.9) {
     const c = new THREE.Color(color);
@@ -72,6 +73,35 @@ export class Effects {
     this.scene.add(mesh);
     this.wrecks.push({ mesh, x, z, life: 10, smoke: 0 });
   }
+  shake(durationMs, magnitude) {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (mq.matches) return;
+    }
+    // Take the larger of the two so a fresh shake doesn't shrink an in-flight one.
+    if (magnitude > this.shakeState.mag || this.shakeState.duration <= 0) {
+      this.shakeState.mag = magnitude;
+    }
+    const newDuration = durationMs / 1000;
+    if (newDuration > this.shakeState.duration)
+      this.shakeState.duration = newDuration;
+    if (
+      this.shakeState.duration > 0 &&
+      this.shakeState.time > this.shakeState.duration
+    ) {
+      this.shakeState.time = 0;
+    }
+  }
+  shakeOffset() {
+    return { x: this.shakeState.ox, z: this.shakeState.oz };
+  }
+  shakeReset() {
+    this.shakeState.mag = 0;
+    this.shakeState.duration = 0;
+    this.shakeState.time = 0;
+    this.shakeState.ox = 0;
+    this.shakeState.oz = 0;
+  }
   tick(dt) {
     this.particles = this.particles.filter((p) => {
       p.life -= dt;
@@ -114,6 +144,16 @@ export class Effects {
       }
       return true;
     });
+    // Camera shake decay (linear)
+    if (this.shakeState.duration > 0) {
+      this.shakeState.time += dt;
+      const t = Math.min(1, this.shakeState.time / this.shakeState.duration);
+      const decay = 1 - t;
+      const mag = this.shakeState.mag * decay;
+      this.shakeState.ox = (this.rng() - 0.5) * 2 * mag;
+      this.shakeState.oz = (this.rng() - 0.5) * 2 * mag;
+      if (t >= 1) this.shakeReset();
+    }
   }
   clear() {
     this.particles = [];

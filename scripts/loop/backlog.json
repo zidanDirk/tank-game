@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "ui-01-shake",
+      "title": "命中与爆炸的屏幕震动",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/systems/Effects.js",
+        "src/core/GameManager.js",
+        "src/systems/BulletManager.js"
+      ],
+      "verify": [
+        "effects.shake method exists",
+        "GameManager.onTankDestroyed triggers shake",
+        "reduced-motion respected"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:10:02.432Z"
+    },
+    {
+      "id": "ui-02-damage-flash",
+      "title": "玩家受击红屏 vignette",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/style.css",
+        "src/core/GameManager.js",
+        "src/entities/Tank.js",
+        "index.html"
+      ],
+      "verify": [
+        "damage-vignette.show toggled on PlayerTank.hit"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:10:02.432Z"
+    },
+    {
+      "id": "ui-03-score-popup",
+      "title": "击杀得分飘字 +N",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/systems/Effects.js",
+        "src/core/GameManager.js",
+        "src/style.css",
+        "index.html"
+      ],
+      "verify": [
+        "score-popup DOM appears on kill",
+        "removed after 1.2s"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:10:02.432Z"
+    },
+    {
+      "id": "ui-04-bullet-trail",
+      "title": "玩家子弹拖尾 tracer",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/systems/BulletManager.js",
+        "src/core/GameManager.js"
+      ],
+      "verify": [
+        "THREE.Line trail on player bullets",
+        "alpha decays to 0"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:10:02.432Z"
+    },
+    {
+      "id": "ui-05-levelup-pop",
+      "title": "升级 +1 浮层动画",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/entities/Tank.js",
+        "src/style.css"
+      ],
+      "verify": [
+        "level-burst DOM added on PlayerTank.upgrade"
+      ],
+      "estimate": "XS",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:10:02.432Z"
+    }
+  ],
+  "ideas": [
+    "启用 MODIFIERS（fog/iron/rapid/siege）四选一 ready 屏选择面板",
+    "连击 / 击杀 streak 倍率（HUD 显示倍率）",
+    "关卡结算统计面板（击杀 / 用时 / 道具使用 / 命中率）",
+    "移动端 haptic feedback（navigator.vibrate）",
+    "Web Audio 程序化 BGM（military march 风格）",
+    "无尽模式每日挑战 seed 分享（URL hash）",
+    "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）",
+    "玩家死亡时屏幕短暂黑白滤镜"
+  ]
+}

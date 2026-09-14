@@ -1,3 +1,46 @@
+const FREQ = {
+  shoot: 180,
+  hit: 90,
+  brick: 130,
+  explosion: 65,
+  start: 440,
+  "pickup-spawn": 220,
+  powerup: 330,
+  levelup: 520,
+  shield: 280,
+  bomb: 110,
+  clock: 360,
+  shovel: 200,
+};
+const DUR = {
+  shoot: 0.1,
+  hit: 0.1,
+  brick: 0.1,
+  explosion: 0.4,
+  start: 0.4,
+  "pickup-spawn": 0.18,
+  powerup: 0.22,
+  levelup: 0.3,
+  shield: 0.18,
+  bomb: 0.45,
+  clock: 0.32,
+  shovel: 0.22,
+};
+const WAVE = {
+  shoot: "square",
+  hit: "square",
+  brick: "square",
+  explosion: "sawtooth",
+  start: "square",
+  "pickup-spawn": "triangle",
+  powerup: "triangle",
+  levelup: "triangle",
+  shield: "sine",
+  bomb: "sawtooth",
+  clock: "sine",
+  shovel: "square",
+};
+
 export class AudioSystem {
   constructor() {
     this.muted = false;
@@ -29,11 +72,9 @@ export class AudioSystem {
     const g = c.createGain();
     g.connect(this.master);
     const o = c.createOscillator();
-    o.type = kind === "explosion" ? "sawtooth" : "square";
-    const f =
-      { shoot: 180, hit: 90, brick: 130, explosion: 65, start: 440 }[kind] ||
-      180;
-    const d = kind === "explosion" ? 0.4 : 0.1;
+    o.type = WAVE[kind] ?? "square";
+    const f = FREQ[kind] ?? 180;
+    const d = DUR[kind] ?? 0.1;
     o.frequency.setValueAtTime(f, t);
     o.frequency.exponentialRampToValueAtTime(25, t + d);
     g.gain.setValueAtTime(0.6, t);

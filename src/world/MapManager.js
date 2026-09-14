@@ -17,7 +17,10 @@ export class MapManager {
     scene.add(this.root);
     this.cells = new Uint8Array(SIZE * SIZE);
     this.brickInstances = new Map();
+    this.steelInstances = new Map();
     this.ruins = [];
+    this.fortifyBackup = null;
+    this.fortifyExpiry = 0;
     this.build();
   }
   index(x, z) {
@@ -39,6 +42,11 @@ export class MapManager {
     const brick = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.BRICK);
     const steel = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.STEEL);
     const water = (x, z, w, h) => this.rectangle(x, z, w, h, CELL.WATER);
+
+    if (this.level === "endless") {
+      // Endless maps inject their own layout; no preset terrain is added here.
+      return;
+    }
 
     if (this.level === "crossfire") {
       for (const x of [2, 6, 16, 20, 23]) {
@@ -132,16 +140,24 @@ export class MapManager {
     this.bricks = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.45, 0.27, 0.94),
       mat(0xffffff),
-      brickCount * 6,
+      Math.max(1, brickCount * 6),
     );
     this.bricks.castShadow = true;
     this.bricks.receiveShadow = true;
     this.root.add(this.bricks);
-    const steels = [],
-      caps = [],
-      water = [],
+    const steelCount = this.cells.filter((t) => t === CELL.STEEL).length;
+    this.steelsMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.98, 0.95, 0.98),
+      mat(0x687e76, 0.65, 0.2),
+      Math.max(1, steelCount),
+    );
+    this.steelsMesh.castShadow = true;
+    this.steelsMesh.receiveShadow = true;
+    this.root.add(this.steelsMesh);
+    const water = [],
       ripples = [];
     let bi = 0;
+    let si = 0;
     const m = new THREE.Matrix4();
     for (let z = 0; z < SIZE; z++)
       for (let x = 0; x < SIZE; x++) {
@@ -167,12 +183,9 @@ export class MapManager {
           this.brickInstances.set(this.index(x, z), ids);
         }
         if (t === CELL.STEEL) {
-          const edge = x === 0 || z === 0 || x === 25 || z === 25;
-          const h = edge ? 0.65 : 0.95;
-          steels.push(box(0.98, h, 0.98, x + 0.5, h / 2, z + 0.5));
-          caps.push(box(0.84, 0.07, 0.84, x + 0.5, h + 0.015, z + 0.5));
-          if (!edge)
-            caps.push(box(0.11, 0.015, 0.7, x + 0.5, h + 0.06, z + 0.5));
+          m.makeTranslation(x + 0.5, 0.475, z + 0.5);
+          this.steelsMesh.setMatrixAt(si, m);
+          this.steelInstances.set(this.index(x, z), si++);
         }
         if (t === CELL.WATER) {
           water.push(box(0.99, 0.035, 0.99, x + 0.5, 0.015, z + 0.5));
@@ -183,11 +196,16 @@ export class MapManager {
             );
         }
       }
-    merged(this.root, steels, mat(0x687e76, 0.65, 0.2));
-    merged(this.root, caps, mat(0x92a298, 0.52, 0.15));
-    this.waterMesh = merged(this.root, water, mat(0x72aab0, 0.27, 0.22));
-    this.waterMesh.castShadow = false;
-    merged(this.root, ripples, mat(0xb4d4ce));
+    this.bricks.instanceMatrix.needsUpdate = true;
+    if (this.bricks.instanceColor) this.bricks.instanceColor.needsUpdate = true;
+    this.steelsMesh.count = si;
+    this.steelsMesh.instanceMatrix.needsUpdate = true;
+    if (water.length) {
+      this.waterMesh = merged(this.root, water, mat(0x72aab0, 0.27, 0.22));
+      this.waterMesh.castShadow = false;
+    }
+    if (ripples.length)
+      merged(this.root, ripples, mat(0xb4d4ce));
     this.eagle = eagleModel();
     this.eagle.position.set(13, 0, 23);
     this.root.add(this.eagle);
@@ -227,12 +245,119 @@ export class MapManager {
     this.bricks.instanceMatrix.needsUpdate = true;
     return true;
   }
+  destroySteel(x, z) {
+    if (this.get(x, z) !== CELL.STEEL) return false;
+    this.set(x, z, CELL.EMPTY);
+    const i = this.steelInstances.get(this.index(x, z));
+    if (i !== undefined) {
+      this.steelsMesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+      this.steelsMesh.instanceMatrix.needsUpdate = true;
+    }
+    return true;
+  }
   destroyBase() {
     this.base.alive = false;
     this.eagle.rotation.z = 0.2;
     this.eagle.scale.y = 0.35;
   }
+  rebuildInstances() {
+    if (!this.bricks || !this.steelsMesh) return;
+    this.brickInstances.clear();
+    this.steelInstances.clear();
+    const m = new THREE.Matrix4();
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < this.bricks.count; i++) this.bricks.setMatrixAt(i, zero);
+    for (let i = 0; i < this.steelsMesh.count; i++)
+      this.steelsMesh.setMatrixAt(i, zero);
+    let bi = 0;
+    let si = 0;
+    for (let z = 0; z < SIZE; z++)
+      for (let x = 0; x < SIZE; x++) {
+        const t = this.get(x, z);
+        if (t === CELL.BRICK) {
+          const ids = [];
+          for (let row = 0; row < 3; row++)
+            for (let col = 0; col < 2; col++) {
+              m.makeTranslation(
+                x + 0.25 + col * 0.5,
+                0.15 + row * 0.29,
+                z + 0.5,
+              );
+              this.bricks.setMatrixAt(bi, m);
+              this.bricks.setColorAt(
+                bi,
+                new THREE.Color().setHex(
+                  (x + z + row) % 3 === 0 ? 0xc88b60 : 0xae694b,
+                ),
+              );
+              ids.push(bi++);
+            }
+          this.brickInstances.set(this.index(x, z), ids);
+        }
+        if (t === CELL.STEEL) {
+          m.makeTranslation(x + 0.5, 0.475, z + 0.5);
+          this.steelsMesh.setMatrixAt(si, m);
+          this.steelInstances.set(this.index(x, z), si++);
+        }
+      }
+    this.bricks.count = bi;
+    this.bricks.instanceMatrix.needsUpdate = true;
+    if (this.bricks.instanceColor) this.bricks.instanceColor.needsUpdate = true;
+    this.steelsMesh.count = si;
+    this.steelsMesh.instanceMatrix.needsUpdate = true;
+  }
+  fortifyBase(time, gameTime) {
+    if (this.fortifyBackup) return false;
+    const tiles = [];
+    for (const [x, z] of [
+      [11, 21],
+      [11, 22],
+      [12, 21],
+      [13, 21],
+      [14, 21],
+      [14, 22],
+    ]) {
+      const idx = this.index(x, z);
+      tiles.push({ x, z, prev: this.cells[idx] });
+      this.cells[idx] = CELL.STEEL;
+    }
+    this.fortifyBackup = { tiles, total: 6, remaining: 6 };
+    this.refreshFortifyVisual();
+    this.fortifyExpiry = gameTime + time;
+    return true;
+  }
+  refreshFortifyVisual() {
+    if (!this.fortifyBackup) return;
+    const m = new THREE.Matrix4().makeTranslation;
+    let si = this.steelsMesh.count;
+    const mat4 = new THREE.Matrix4();
+    for (const t of this.fortifyBackup.tiles) {
+      if (t.prev === CELL.STEEL) continue;
+      mat4.makeTranslation(t.x + 0.5, 0.475, t.z + 0.5);
+      this.steelsMesh.setMatrixAt(si, mat4);
+      this.steelInstances.set(this.index(t.x, t.z), si++);
+    }
+    this.steelsMesh.count = si;
+    this.steelsMesh.instanceMatrix.needsUpdate = true;
+  }
+  tickFortify(gameTime) {
+    if (!this.fortifyBackup) return;
+    if (gameTime >= this.fortifyExpiry) {
+      for (const t of this.fortifyBackup.tiles) {
+        this.cells[this.index(t.x, t.z)] = t.prev;
+        const i = this.steelInstances.get(this.index(t.x, t.z));
+        if (i !== undefined) {
+          this.steelsMesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+          this.steelInstances.delete(this.index(t.x, t.z));
+        }
+      }
+      this.fortifyBackup = null;
+      this.steelsMesh.count = this.steelInstances.size;
+      this.steelsMesh.instanceMatrix.needsUpdate = true;
+    }
+  }
   tick(time) {
+    if (!this.waterMesh) return;
     this.waterMesh.material.color.setHSL(
       0.49,
       0.24,

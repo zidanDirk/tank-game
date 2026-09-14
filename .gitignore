@@ -2,3 +2,6 @@ node_modules/
 dist/
 .DS_Store
 *.log
+scripts/loop/current/
+artifacts/loop-history/
+node_modules/.cache/

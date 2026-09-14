@@ -12,7 +12,35 @@ export const TYPES = {
   light: { color: 0xb65c48, speed: 2.9, hp: 1, cooldown: 2, score: 100 },
   heavy: { color: 0x66637d, speed: 1.45, hp: 3, cooldown: 2.5, score: 300 },
   rapid: { color: 0x995474, speed: 2.2, hp: 1, cooldown: 0.95, score: 200 },
+  armor: { color: 0x8a6a5a, speed: 1.6, hp: 6, cooldown: 1.5, score: 400, multiShot: 2 },
+  boss: { color: 0x4a3a2a, speed: 0.9, hp: 12, cooldown: 1.6, score: 1500, multiShot: 3 },
 };
+
+// Player tank upgrade levels (Battle City classic).
+// Index 0 = Lv1 (initial), index 3 = Lv4 (max).
+// At Lv3+ the tank fires two bullets side by side; at Lv4 its bullets can
+// destroy steel walls.
+export const PLAYER_LEVELS = [
+  { speed: 4.1, cooldown: 0.3, multiShot: 1, breakSteel: false },
+  { speed: 4.4, cooldown: 0.22, multiShot: 1, breakSteel: false },
+  { speed: 4.7, cooldown: 0.22, multiShot: 2, breakSteel: false },
+  { speed: 5.0, cooldown: 0.18, multiShot: 2, breakSteel: true },
+];
+export const PLAYER_MAX_LEVEL = PLAYER_LEVELS.length;
+export const POWERUP_DROP_CHANCE = 0.22;
+export const POWERUP_LIFE = 6;
+export const POWERUP_PULL_SPEED = 2.5;
+// Power-up visual glyphs and durations. The handler is dispatched in
+// GameManager.applyPickup using the same key.
+export const POWERUPS = {
+  star: { glyph: "★", color: 0xf3d65a, duration: 0 },
+  helmet: { glyph: "🪖", color: 0xb4d8ff, duration: 10 },
+  clock: { glyph: "⏱", color: 0x6080ff, duration: 7 },
+  bomb: { glyph: "💣", color: 0xff7a4a, duration: 0 },
+  tank: { glyph: "🚜", color: 0x9bbf5a, duration: 0 },
+  shovel: { glyph: "🧱", color: 0xc98a5b, duration: 15 },
+};
+export const POWERUP_KEYS = Object.keys(POWERUPS);
 
 const levelOne = [
   "light",
@@ -43,6 +71,7 @@ export const LEVELS = [
     speedMultiplier: 1,
     fireMultiplier: 1,
     map: "training",
+    allowPowerups: false,
   },
   {
     number: 2,
@@ -73,6 +102,7 @@ export const LEVELS = [
     speedMultiplier: 1.08,
     fireMultiplier: 0.9,
     map: "crossfire",
+    allowPowerups: true,
   },
   {
     number: 3,
@@ -106,8 +136,184 @@ export const LEVELS = [
     speedMultiplier: 1.18,
     fireMultiplier: 0.78,
     map: "citadel",
+    allowPowerups: true,
   },
 ];
+
+// Procedural map presets for endless mode. Each preset is a 26x26 ASCII grid.
+// Symbols: '.' empty, '#' brick, 'S' steel, '~' water, 'B' base, ' ' empty
+// Base spawns always at row 22 columns 12-13 (matching campaign maps).
+function presetFromRows(rows) {
+  return rows.map((row) => {
+    if (row.length === SIZE) return row;
+    if (row.length > SIZE) return row.slice(0, SIZE);
+    return row + " ".repeat(SIZE - row.length);
+  });
+}
+
+export const MAP_PRESETS = [
+  {
+    id: "corridor",
+    label: "六道走廊",
+    rows: presetFromRows([
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..........................",
+      "..####..####..####..####...",
+      "..####..####..####..####...",
+      "..........................",
+      "..........................",
+      "...####...####...####...#..",
+      "...####...####...####...#..",
+      "..........................",
+      "..........................",
+      "....####....####....####...",
+      "....####....####....####...",
+      "..........................",
+      "..........................",
+      ".....####.....####.....#...",
+      ".....####.....####.....#...",
+      "..........................",
+      ".S..S.............S..S.....",
+      "..#####..#.#..#####........",
+      "..##..##..#.#..##..##......",
+      "....BB.....................",
+      "..........................",
+    ]),
+  },
+  {
+    id: "maze",
+    label: "钢墙迷宫",
+    rows: presetFromRows([
+      "..........................",
+      ".S.S.S.S.S.S.S.S.S.S.S.S..",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..S.S..S.S.S.S..S.S..S.S..",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..S.S..S.S.S.S..S.S..S.S..",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..S.S..S.S.S.S..S.S..S.S..",
+      "..........................",
+      ".S..S.............S..S.....",
+      "..#####..#.#..#####........",
+      "..##..##..#.#..##..##......",
+      "....BB.....................",
+      "..........................",
+    ]),
+  },
+  {
+    id: "water",
+    label: "水域阻击",
+    rows: presetFromRows([
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..~~~~~........~~~~~......",
+      "..~~~~~........~~~~~......",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "........~~~......~~~.......",
+      "........~~~......~~~.......",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      "..........................",
+      "..~~~~~........~~~~~......",
+      "..~~~~~........~~~~~......",
+      "..........................",
+      ".####.####.####.####.####..",
+      ".####.####.####.####.####..",
+      ".S..S.............S..S.....",
+      "..#####..#.#..#####........",
+      "..##..##..#.#..##..##......",
+      "....BB.....................",
+      "..........................",
+    ]),
+  },
+  {
+    id: "cage",
+    label: "围城死斗",
+    rows: presetFromRows([
+      "..........................",
+      ".#######################...",
+      ".#######################...",
+      "..........................",
+      ".####..............####....",
+      ".####..............####....",
+      ".####..##########..####....",
+      ".####..##########..####....",
+      "......##########......S...",
+      ".S...##########......S....",
+      ".S...##########......S....",
+      "......##########...........",
+      ".####..##########..####....",
+      ".####..##########..####....",
+      ".####..............####....",
+      ".####..............####....",
+      "..........................",
+      ".#######################...",
+      ".#######################...",
+      "..........................",
+      ".####..............####....",
+      ".####..............####....",
+      ".####..##.BB.##....####....",
+      ".####..##.BB.##....####....",
+      "..........................",
+      "..........................",
+    ]),
+  },
+];
+
+// Endless mode tuning knobs.
+export const ENDLESS = {
+  startEnemies: 4,
+  spawnIntervalBase: 4.2,
+  spawnIntervalMin: 1.3,
+  fireMultiplierBase: 1,
+  fireMultiplierDecay: 0.04,
+  speedGrowth: 0.06,
+  armorUnlockWave: 5,
+  bossEvery: 5,
+  livesStart: 3,
+  livesMax: 5,
+  powerupDropChance: 0.28,
+  leaderboardSize: 10,
+};
+
+// Map modifier rolls for endless mode. Each entry is an optional tweak to
+// apply at the start of a run. Multiple modifiers can stack.
+export const MODIFIERS = [
+  { id: "fog", label: "战争迷雾", hint: "视线受限" },
+  { id: "iron", label: "钢铁模式", hint: "1 条命" },
+  { id: "rapid", label: "急速火力", hint: "射速 +40%" },
+  { id: "siege", label: "围攻", hint: "刷新 +20%" },
+];
+
+export function dailySeed(now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const d = now.getDate();
+  return y * 10000 + m * 100 + d;
+}
+
 export function seededRandom(seed = 1990) {
   return () => {
     seed |= 0;

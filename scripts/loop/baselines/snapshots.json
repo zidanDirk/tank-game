@@ -1,0 +1,333 @@
+{
+  "ready": {
+    "state": "ready",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 38
+    }
+  },
+  "active": {
+    "state": "playing",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0.9833333333333347,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 30
+    }
+  },
+  "paused": {
+    "state": "paused",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 27
+    }
+  },
+  "buffs": {
+    "state": "paused",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [
+      "helmet",
+      "clock"
+    ],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 3
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 27
+    }
+  },
+  "boss": {
+    "state": "paused",
+    "mode": "endless",
+    "wave": 5,
+    "level": 5,
+    "levelName": "无尽模式 · 第 5 波",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 4,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "armor",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 6
+      },
+      {
+        "type": "rapid",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "boss",
+        "x": 12.5,
+        "z": 2.5,
+        "hp": 12
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 88,
+      "triangles": 34350,
+      "geometries": 46,
+      "textures": 3,
+      "fps": 24
+    }
+  },
+  "level-clear": {
+    "state": "level-clear",
+    "mode": "campaign",
+    "wave": 5,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 25
+    }
+  },
+  "lost": {
+    "state": "level-clear",
+    "mode": "endless",
+    "wave": 1,
+    "level": 1,
+    "levelName": "无尽模式 · 第 1 波",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "rapid",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 70,
+      "triangles": 32366,
+      "geometries": 37,
+      "textures": 3,
+      "fps": 24
+    }
+  }
+}
