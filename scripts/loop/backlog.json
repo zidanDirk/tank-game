@@ -133,6 +133,26 @@
       "skill": "tank-ui-juice",
       "done_at": "2026-09-14T10:38:28.081Z",
       "commit": "9d46592"
+    },
+    {
+      "id": "ui-07-bullet-time",
+      "title": "连击倍率触发短暂 bullet-time",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/systems/Effects.js",
+        "src/core/GameManager.js",
+        "tests/bullet-time.test.js"
+      ],
+      "verify": [
+        "Effects.slowMo sets and decays a time-scale",
+        "GameManager.frame multiplies dt by the active time-scale",
+        "slowMo triggers on kills reaching streakMult >= 3"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:43:08.470Z",
+      "commit": "8fb3ff9"
     }
   ],
   "ideas": [
@@ -141,32 +161,6 @@
     "移动端 haptic feedback（navigator.vibrate）",
     "Web Audio 程序化 BGM（military march 风格）",
     "无尽模式每日挑战 seed 分享（URL hash）",
-    "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）",
-    {
-      "id": "h-2026-09-14-001",
-      "title": "Bullet-time 0.3s on player kill streak",
-      "category": "ui-ux",
-      "estimate": "S",
-      "source": {
-        "url": "https://gdcvault.com/game-feel",
-        "domain": "gdcvault.com",
-        "trust": 0.9,
-        "fetched_at": "2026-09-14T10:38:17.657Z"
-      },
-      "score": {
-        "feasibility": 4,
-        "novelty": 5,
-        "effort_fit": 3,
-        "domain_fit": 5,
-        "total": 17
-      },
-      "suggested_touches": [
-        "src/systems/Effects.js",
-        "src/core/GameManager.js"
-      ],
-      "human_status": "accepted",
-      "human_decision_at": "2026-09-14T10:38:17.657Z",
-      "fetched_at": "2026-09-14T10:38:17.657Z"
-    }
+    "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）"
   ]
 }

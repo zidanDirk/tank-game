@@ -26,6 +26,7 @@ export class Effects {
     scene.add(this.points);
     this.wrecks = [];
     this.shakeState = { mag: 0, duration: 0, time: 0, ox: 0, oz: 0 };
+    this.slowMoState = { remaining: 0, scale: 1 };
   }
   burst(x, y, z, color, count = 15, life = 0.9) {
     const c = new THREE.Color(color);
@@ -102,6 +103,32 @@ export class Effects {
     this.shakeState.ox = 0;
     this.shakeState.oz = 0;
   }
+  slowMo(durationMs, scale) {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      if (mq.matches) return;
+    }
+    const next = Math.max(0, Math.min(1, scale));
+    const remaining = durationMs / 1000;
+    // Restart with the new params when the existing window is over so a fresh
+    // kill always re-triggers the bullet-time cleanly.
+    if (this.slowMoState.remaining <= 0) {
+      this.slowMoState.scale = next;
+      this.slowMoState.remaining = remaining;
+    } else {
+      // Mid-effect: take the smaller (slower) scale so a peak kill stacks.
+      if (next < this.slowMoState.scale) this.slowMoState.scale = next;
+      if (remaining > this.slowMoState.remaining)
+        this.slowMoState.remaining = remaining;
+    }
+  }
+  slowMoScale() {
+    return this.slowMoState.remaining > 0 ? this.slowMoState.scale : 1;
+  }
+  slowMoReset() {
+    this.slowMoState.remaining = 0;
+    this.slowMoState.scale = 1;
+  }
   tick(dt) {
     this.particles = this.particles.filter((p) => {
       p.life -= dt;
@@ -154,6 +181,12 @@ export class Effects {
       this.shakeState.oz = (this.rng() - 0.5) * 2 * mag;
       if (t >= 1) this.shakeReset();
     }
+    // Bullet-time decay: remaining tracks WALL-CLOCK seconds, so simulation
+    // speed scales but real-time delay is not.
+    if (this.slowMoState.remaining > 0) {
+      this.slowMoState.remaining -= dt;
+      if (this.slowMoState.remaining <= 0) this.slowMoReset();
+    }
   }
   clear() {
     this.particles = [];
@@ -164,5 +197,7 @@ export class Effects {
       w.mesh.material.dispose();
     }
     this.wrecks = [];
+    this.shakeReset();
+    this.slowMoReset();
   }
 }

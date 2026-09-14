@@ -514,6 +514,9 @@ export class GameManager {
       };
       const label =
         this.streakMult > 1 ? `+${award} ×${this.streakMult}` : `+${award}`;
+      // Peak streak (×3 / ×4) kicks in a brief bullet-time so the kill feels
+      // heavy. The streak window naturally gates re-triggers to once per 4s.
+      if (this.streakMult >= 3) this.effects.slowMo(300, 0.3);
       this.scorePopup(
         tank.x,
         tank.z,
@@ -838,8 +841,11 @@ export class GameManager {
     this.camera.updateProjectionMatrix();
   }
   frame(ms) {
-    const dt = this.lastTime ? Math.min((ms - this.lastTime) / 1000, 0.1) : 0;
+    const rawDt = this.lastTime ? Math.min((ms - this.lastTime) / 1000, 0.1) : 0;
     this.lastTime = ms;
+    // Bullet-time scales the simulation rate, not wall-clock; multiply
+    // before the accumulator so the fixed-step loop naturally runs slower.
+    const dt = rawDt * this.effects.slowMoScale();
     this.fps = this.fps * 0.95 + (dt > 0 ? 1 / dt : 60) * 0.05;
     if (this.state === "playing") {
       this.accumulator += dt;

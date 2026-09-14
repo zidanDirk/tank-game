@@ -22,11 +22,14 @@ function stubGame() {
     effects: {
       burst() {},
       shake() {},
+      slowMo() {},
+      slowMoScale() { return 1; },
       shakeOffset() { return { x: 0, z: 0 }; },
     },
     scorePopup() {},
     updateUI() {},
     syncBuffHud() {},
+    flashDeathGrayscale() {},
     finish(won) {
       this.state = won ? "won" : "lost";
     },
