@@ -282,6 +282,14 @@ export const MAP_PRESETS = [
   },
 ];
 
+// Kill-streak combo: consecutive enemy kills within STREAK.window seconds
+// multiply the awarded score up to STREAK.maxMult. Resets after the window
+// or on player death. Visible on HUD via the #streak-badge.
+export const STREAK = {
+  window: 4.0, // seconds before the streak decays back to zero
+  maxMult: 4, // cap so a perfect run doesn't run away
+};
+
 // Endless mode tuning knobs.
 export const ENDLESS = {
   startEnemies: 4,

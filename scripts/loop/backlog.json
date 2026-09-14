@@ -89,11 +89,34 @@
       "status": "done",
       "skill": "tank-ui-juice",
       "done_at": "2026-09-14T10:10:02.432Z"
+    },
+    {
+      "id": "gameplay-01-streak",
+      "title": "击杀连击 streak 倍率",
+      "dimension": "gameplay",
+      "touches": [
+        "src/core/config.js",
+        "src/core/GameManager.js",
+        "index.html",
+        "src/style.css",
+        "tests/streak.test.js"
+      ],
+      "verify": [
+        "GameManager.killStreak increments on consecutive kills",
+        "score multiplier caps at STREAK.maxMult",
+        "streak resets after STREAK.window seconds of no kill",
+        "HUD #streak-badge shows current multiplier (hidden when x1)",
+        "snapshot() exposes killStreak and streakMult"
+      ],
+      "estimate": "S",
+      "status": "done",
+      "skill": null,
+      "done_at": "2026-09-14T10:28:14.595Z",
+      "commit": "9b6dde8"
     }
   ],
   "ideas": [
     "启用 MODIFIERS（fog/iron/rapid/siege）四选一 ready 屏选择面板",
-    "连击 / 击杀 streak 倍率（HUD 显示倍率）",
     "关卡结算统计面板（击杀 / 用时 / 道具使用 / 命中率）",
     "移动端 haptic feedback（navigator.vibrate）",
     "Web Audio 程序化 BGM（military march 风格）",

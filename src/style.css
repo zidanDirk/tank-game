@@ -455,6 +455,50 @@ kbd {
   font-size: 9px;
   color: #8e9686;
 }
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #f3d65a;
+  background: rgba(243, 214, 90, 0.12);
+  color: #b88a17;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  border-radius: 3px;
+  margin-left: 12px;
+  animation: streakPulse 1.4s ease-in-out infinite;
+}
+.streak-badge.hot {
+  border-color: var(--orange);
+  background: rgba(218, 107, 56, 0.16);
+  color: var(--orange);
+  animation-duration: 0.9s;
+}
+.streak-badge b {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+@keyframes streakPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(243, 214, 90, 0.0);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 3px rgba(243, 214, 90, 0.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .streak-badge,
+  .streak-badge.hot {
+    animation: none;
+  }
+}
 .kill-row {
   display: flex;
   justify-content: space-between;

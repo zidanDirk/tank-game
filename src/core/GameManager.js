@@ -12,6 +12,7 @@ import {
   dailySeed,
   CELL,
   SIZE,
+  STREAK,
 } from "./config.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
@@ -121,6 +122,8 @@ export class GameManager {
         "boss-hp",
         "boss-hp-fill",
         "leaderboard",
+        "streak-badge",
+        "streak-mult",
       ].map((id) => [id, document.getElementById(id)]),
     );
     // Damage vignette lives outside the ui map because it is queried lazily.
@@ -207,6 +210,9 @@ export class GameManager {
     this.respawnTimer = 0;
     this.time = 0;
     this.accumulator = 0;
+    this.killStreak = 0;
+    this.lastKillAt = -Infinity;
+    this.streakMult = 1;
     this.spawnEnemy(0);
     this.spawnEnemy(2);
     this.updateUI();
@@ -244,6 +250,9 @@ export class GameManager {
     this.respawnTimer = 0;
     this.time = 0;
     this.accumulator = 0;
+    this.killStreak = 0;
+    this.lastKillAt = -Infinity;
+    this.streakMult = 1;
     this.spawnEnemy(0);
     this.spawnEnemy(2);
     this.updateUI();
@@ -460,6 +469,9 @@ export class GameManager {
     if (tank.team === "player") {
       this.lives--;
       this.effects.shake(350, 0.1);
+      // A lost life breaks the streak — punish the player for taking a hit.
+      this.killStreak = 0;
+      this.streakMult = 1;
       if (this.lives <= 0) {
         const reason =
           this.mode === "endless"
@@ -468,7 +480,13 @@ export class GameManager {
         this.finish(false, reason);
       } else this.respawnTimer = 1.4;
     } else {
-      this.score += tank.score;
+      // Streak: extend if the gap is within the window, otherwise restart at 1.
+      if (this.time - this.lastKillAt <= STREAK.window) this.killStreak += 1;
+      else this.killStreak = 1;
+      this.lastKillAt = this.time;
+      this.streakMult = Math.min(this.killStreak, STREAK.maxMult);
+      const award = tank.score * this.streakMult;
+      this.score += award;
       this.kills++;
       const colorByType = {
         light: "#f3d65a",
@@ -477,10 +495,12 @@ export class GameManager {
         armor: "#a24e38",
         boss: "#ffd700",
       };
+      const label =
+        this.streakMult > 1 ? `+${award} ×${this.streakMult}` : `+${award}`;
       this.scorePopup(
         tank.x,
         tank.z,
-        `+${tank.score}`,
+        label,
         colorByType[tank.type] ?? "#f3d65a",
       );
       if (tank === this.boss) {
@@ -713,6 +733,13 @@ export class GameManager {
         this.ui["boss-hp-fill"].style.width = `${fill * 100}%`;
       }
     }
+    if (this.ui["streak-badge"]) {
+      const active = this.streakMult > 1;
+      this.ui["streak-badge"].hidden = !active;
+      this.ui["streak-badge"].classList.toggle("hot", this.streakMult >= 3);
+      if (this.ui["streak-mult"])
+        this.ui["streak-mult"].textContent = `×${this.streakMult}`;
+    }
   }
   tick(dt) {
     this.time += dt;
@@ -742,6 +769,11 @@ export class GameManager {
     });
     for (const [key, expires] of this.activeBuffs)
       if (this.time >= expires) this.activeBuffs.delete(key);
+    // Decay the kill-streak when no enemy has been killed for STREAK.window.
+    if (this.killStreak > 0 && this.time - this.lastKillAt > STREAK.window) {
+      this.killStreak = 0;
+      this.streakMult = 1;
+    }
     this.syncBuffHud();
     if (this.boss && this.boss.alive && this.ui["boss-hp"]) {
       const maxHp = this.boss.maxHp ?? TYPES.boss.hp;
@@ -832,6 +864,8 @@ export class GameManager {
       kills: this.kills,
       lives: this.lives,
       baseAlive: this.map.base.alive,
+      killStreak: this.killStreak ?? 0,
+      streakMult: this.streakMult ?? 1,
       buffs: [...this.activeBuffs.keys()],
       player: {
         x: this.player.x,
