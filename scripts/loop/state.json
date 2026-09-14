@@ -1,10 +1,40 @@
 {
-  "version": 1,
+  "version": 2,
   "started_at": "2026-09-14T17:40:00Z",
   "current_item_id": null,
   "current_cycle_id": null,
   "worktree_path": null,
   "branch": null,
+  "harvest_cursor": "2026-09-07T00:00:00Z",
+  "harvest_runs": [
+    {
+      "id": "2026-09-14-1837",
+      "raw_ref": "harvest/raw/2026-09-14.json",
+      "scored_ref": "harvest/scored/2026-09-14.json",
+      "raw_count": 3,
+      "scored_top_count": 3,
+      "human_decisions": null,
+      "at": "2026-09-14T10:37:12.252Z"
+    },
+    {
+      "id": "2026-09-14-1838",
+      "scored_ref": "harvest/scored/2026-09-14.json",
+      "raw_count": 3,
+      "scored_top_count": 3,
+      "human_decisions": {
+        "accepted": 1,
+        "deferred": 0,
+        "dropped": 1,
+        "reasons": {
+          "3": "tech-debt not in scope"
+        }
+      },
+      "fetched_urls_hash": "sha256:a5fc74706b567dcc",
+      "at": "2026-09-14T10:38:17.657Z"
+    }
+  ],
+  "last_human_review_at": "2026-09-14T10:38:17.657Z",
+  "schema_migrated_at": "2026-09-14T18:30:00Z",
   "cycles": [
     {
       "id": "2026-09-14-1750-01",
@@ -53,11 +83,19 @@
       "commit": "363273e",
       "journal": "scripts/loop/journal/2026-09-14-1825.md",
       "at": "2026-09-14T10:28:14.595Z"
+    },
+    {
+      "id": "2026-09-14-1836",
+      "item_id": "ui-06-death-grayscale",
+      "verdict": "pass",
+      "commit": "9d46592",
+      "journal": "scripts/loop/journal/2026-09-14-1836.md",
+      "at": "2026-09-14T10:38:28.081Z"
     }
   ],
   "needs_human": false,
   "next_action": "run_loop_next",
-  "completed_items": 6,
+  "completed_items": 7,
   "failed_cycles_in_row": 0,
   "last_init_at": "2026-09-14T17:50:00Z",
   "last_completed_at": "2026-09-14T17:55:00Z",

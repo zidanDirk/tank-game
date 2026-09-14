@@ -375,6 +375,22 @@ export class GameManager {
     clearTimeout(this._damageTimer);
     this._damageTimer = setTimeout(() => el.classList.remove("show"), 90);
   }
+  flashDeathGrayscale() {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    }
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    if (!body) return;
+    body.classList.remove("death-grayscale");
+    void body.offsetWidth; // restart the transition on rapid deaths
+    body.classList.add("death-grayscale");
+    clearTimeout(this._deathTimer);
+    this._deathTimer = setTimeout(
+      () => body.classList.remove("death-grayscale"),
+      900,
+    );
+  }
   showLevelBurst(x, z, from, to) {
     const layer = this.scoreLayer;
     if (!layer) return;
@@ -473,6 +489,7 @@ export class GameManager {
       this.killStreak = 0;
       this.streakMult = 1;
       if (this.lives <= 0) {
+        this.flashDeathGrayscale();
         const reason =
           this.mode === "endless"
             ? `第 ${this.wave} 波阵亡。记住这条路线，重新来过。`

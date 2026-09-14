@@ -113,6 +113,26 @@
       "skill": null,
       "done_at": "2026-09-14T10:28:14.595Z",
       "commit": "9b6dde8"
+    },
+    {
+      "id": "ui-06-death-grayscale",
+      "title": "玩家死亡短暂黑白滤镜",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/core/GameManager.js",
+        "src/style.css",
+        "tests/death-grayscale.test.js"
+      ],
+      "verify": [
+        "body.death-grayscale class toggled on player final life loss",
+        "auto-removed after 900ms",
+        "prefers-reduced-motion skips the effect"
+      ],
+      "estimate": "XS",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-14T10:38:28.081Z",
+      "commit": "9d46592"
     }
   ],
   "ideas": [
@@ -122,6 +142,31 @@
     "Web Audio 程序化 BGM（military march 风格）",
     "无尽模式每日挑战 seed 分享（URL hash）",
     "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）",
-    "玩家死亡时屏幕短暂黑白滤镜"
+    {
+      "id": "h-2026-09-14-001",
+      "title": "Bullet-time 0.3s on player kill streak",
+      "category": "ui-ux",
+      "estimate": "S",
+      "source": {
+        "url": "https://gdcvault.com/game-feel",
+        "domain": "gdcvault.com",
+        "trust": 0.9,
+        "fetched_at": "2026-09-14T10:38:17.657Z"
+      },
+      "score": {
+        "feasibility": 4,
+        "novelty": 5,
+        "effort_fit": 3,
+        "domain_fit": 5,
+        "total": 17
+      },
+      "suggested_touches": [
+        "src/systems/Effects.js",
+        "src/core/GameManager.js"
+      ],
+      "human_status": "accepted",
+      "human_decision_at": "2026-09-14T10:38:17.657Z",
+      "fetched_at": "2026-09-14T10:38:17.657Z"
+    }
   ]
 }

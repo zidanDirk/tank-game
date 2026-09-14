@@ -168,6 +168,8 @@ test("twelve scored kills win the mission; the third lost player life ends it", 
     kills: 0,
     lives: 3,
     state: "playing",
+    killStreak: 0,
+    streakMult: 1,
     effects: {
       burst() {},
       shake() {},
@@ -175,6 +177,7 @@ test("twelve scored kills win the mission; the third lost player life ends it", 
     },
     scorePopup() {},
     updateUI() {},
+    flashDeathGrayscale() {},
     finish(won) {
       this.state = won ? "won" : "lost";
     },

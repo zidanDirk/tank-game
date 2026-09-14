@@ -1618,6 +1618,27 @@ kbd {
   transition: opacity 80ms ease-out;
 }
 
+/* Death grayscale (ui-06) — brief desaturated filter over the whole page
+   when the player's last life is lost. Cleared after 900ms by the JS. */
+.death-grayscale {
+  filter: grayscale(1) brightness(0.92);
+  transition: filter 80ms ease-out;
+}
+.death-grayscale::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(20, 22, 18, 0.18);
+  z-index: 6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .death-grayscale,
+  .death-grayscale::after {
+    transition: none;
+  }
+}
+
 /* Score popups (ui-03) */
 .score-popup-layer {
   position: fixed;
