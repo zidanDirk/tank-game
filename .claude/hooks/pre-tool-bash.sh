@@ -12,19 +12,29 @@ deny=0
 reason=""
 
 case "$cmd" in
+  # Match rm -rf as a real command — must be preceded by a shell operator
+  # (start, ;, &&, ||, |, (, or backtick) and target a dangerous path.
+  # Embedding `rm -rf` inside quotes/heredoc (e.g. commit messages, echo,
+  # cat <<EOF) is allowed.
   *"rm -rf"*)
-    if echo "$cmd" | grep -qE "(^|\s)rm\s+-rf\s+(/|\$HOME|\.\s|~|$REPO)"; then
+    if printf '%s\n' "$cmd" | grep -qE '(^|[;&|(])\s*rm\s+-rf\s+(/|\$HOME|\.\s|~|"'"$REPO"'")'; then
       deny=1
       reason="rm -rf against $REPO / home / root blocked by PreToolUse hook"
     fi
     ;;
-  *"git push --force"*|*"git push -f"*|*"git push --force-with-lease"*)
-    deny=1
-    reason="force push blocked by PreToolUse hook; use a normal push or amend"
+  # Match git push --force / -f as a real command — must be the leading token,
+  # not embedded in a string literal.
+  *"git push"*)
+    if printf '%s\n' "$cmd" | grep -qE '(^|[;&|(])\s*git\s+push\s+(--force|-f|--force-with-lease)\b'; then
+      deny=1
+      reason="force push blocked by PreToolUse hook; use a normal push or amend"
+    fi
     ;;
   *"git reset --hard"*)
-    deny=1
-    reason="git reset --hard blocked by PreToolUse hook"
+    if printf '%s\n' "$cmd" | grep -qE '(^|[;&|(])\s*git\s+reset\s+--hard\b'; then
+      deny=1
+      reason="git reset --hard blocked by PreToolUse hook"
+    fi
     ;;
 esac
 
