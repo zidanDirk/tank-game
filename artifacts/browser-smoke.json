@@ -1,0 +1,270 @@
+{
+  "pass": true,
+  "errors": [],
+  "badResponses": [],
+  "active": {
+    "state": "playing",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 2.33333333333333,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 20.698333333333405,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 5.979999999999983,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 6.366666666666646,
+        "hp": 1
+      },
+      {
+        "type": "heavy",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 3
+      }
+    ],
+    "bullets": 4,
+    "pickups": 0,
+    "spawned": 3,
+    "render": {
+      "calls": 93,
+      "triangles": 21990,
+      "geometries": 48,
+      "textures": 3,
+      "fps": 23
+    }
+  },
+  "combat": {
+    "state": "playing",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0.7500000000000007,
+    "score": 300,
+    "kills": 1,
+    "lives": 3,
+    "baseAlive": true,
+    "killStreak": 1,
+    "streakMult": 1,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 42,
+      "triangles": 18882,
+      "geometries": 25,
+      "textures": 3,
+      "fps": 22
+    }
+  },
+  "lost": {
+    "state": "lost",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0.5666666666666668,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": false,
+    "killStreak": 0,
+    "streakMult": 1,
+    "buffs": [],
+    "player": {
+      "x": 9.705,
+      "z": 23.5,
+      "alive": true,
+      "aim": 1.5707963267948966,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 74,
+      "triangles": 20882,
+      "geometries": 41,
+      "textures": 3,
+      "fps": 23
+    }
+  },
+  "won": {
+    "state": "level-clear",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0.11666666666666665,
+    "score": 1200,
+    "kills": 12,
+    "lives": 3,
+    "baseAlive": true,
+    "killStreak": 1,
+    "streakMult": 1,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 9.5,
+        "z": 20.5,
+        "hp": 0
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 12,
+    "render": {
+      "calls": 42,
+      "triangles": 18882,
+      "geometries": 33,
+      "textures": 3,
+      "fps": 20
+    }
+  },
+  "restarted": {
+    "state": "playing",
+    "mode": "campaign",
+    "wave": 0,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
+    "buffs": [],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 74,
+      "triangles": 20882,
+      "geometries": 3,
+      "textures": 3,
+      "fps": 21
+    }
+  },
+  "geometryCountsAcrossRestarts": [
+    40,
+    40,
+    40,
+    40
+  ],
+  "mobile": {
+    "before": 23.5,
+    "after": 21.655000000000047,
+    "touchReleased": true,
+    "layout": {
+      "width": 390,
+      "scrollWidth": 390,
+      "canvas": {
+        "x": 17,
+        "y": 173,
+        "width": 356,
+        "height": 433,
+        "top": 173,
+        "right": 373,
+        "bottom": 606,
+        "left": 17
+      }
+    }
+  },
+  "audio": {
+    "state": "running",
+    "muted": false
+  },
+  "production": {
+    "started": true,
+    "debugHooksAbsent": true
+  },
+  "motion": [
+    "motion-1.png",
+    "motion-2.png",
+    "motion-3.png"
+  ]
+}

@@ -30,7 +30,10 @@ test("flashDeathGrayscale adds the death-grayscale class to body", () => {
   const flash = () => {
     if (body.classList.contains("death-grayscale")) return;
     body.classList.add("death-grayscale");
-    g._deathTimer = setTimeout(() => body.classList.remove("death-grayscale"), 900);
+    g._deathTimer = setTimeout(
+      () => body.classList.remove("death-grayscale"),
+      900,
+    );
   };
   flash();
   assert.equal(body.classList.contains("death-grayscale"), true);
@@ -43,7 +46,10 @@ test("flashDeathGrayscale clears the class after 900ms via setTimeout", async ()
   const flash = () => {
     body.classList.add("death-grayscale");
     clearTimeout(g._deathTimer);
-    g._deathTimer = setTimeout(() => body.classList.remove("death-grayscale"), 900);
+    g._deathTimer = setTimeout(
+      () => body.classList.remove("death-grayscale"),
+      900,
+    );
   };
   flash();
   assert.equal(body.classList.contains("death-grayscale"), true);
@@ -66,7 +72,9 @@ test("onTankDestroyed on the final player life triggers flashDeathGrayscale", ()
     effects: {
       burst() {},
       shake() {},
-      shakeOffset() { return { x: 0, z: 0 }; },
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
     },
     scorePopup() {},
     updateUI() {},
@@ -98,7 +106,9 @@ test("onTankDestroyed on a non-final player life does NOT trigger flashDeathGray
     effects: {
       burst() {},
       shake() {},
-      shakeOffset() { return { x: 0, z: 0 }; },
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
     },
     scorePopup() {},
     updateUI() {},

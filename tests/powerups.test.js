@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { PLAYER_LEVELS, POWERUPS, MAP_PRESETS, ENDLESS } from "../src/core/config.js";
+import {
+  PLAYER_LEVELS,
+  POWERUPS,
+  MAP_PRESETS,
+  ENDLESS,
+} from "../src/core/config.js";
 import { MapManager } from "../src/world/MapManager.js";
 import { CollisionSystem } from "../src/systems/CollisionSystem.js";
 import { BulletManager } from "../src/systems/BulletManager.js";
@@ -17,7 +22,16 @@ function fixture() {
     state: "playing",
     time: 4,
     tanks: [],
-    effects: { burst() {}, explode() {}, smoke() {}, shake() {}, shakeOffset() { return { x: 0, z: 0 }; }, shakeReset() {} },
+    effects: {
+      burst() {},
+      explode() {},
+      smoke() {},
+      shake() {},
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
+      shakeReset() {},
+    },
     showLevelBurst() {},
     scorePopup() {},
     audio: { play() {}, unlock() {} },
@@ -193,20 +207,20 @@ test("Bomb powerup forces every enemy to take a hit", () => {
   g.audio = { play() {} };
   const stub = {
     x: 5,
-      z: 5,
-      alive: true,
-      invincible: 0,
-      shieldLeft: 0,
-      hp: 1,
-      team: "enemy",
-      hit() {
-        this.hp--;
-        if (this.hp <= 0) {
-          this.alive = false;
-          g.onTankDestroyed(this);
-        }
-      },
-    };
+    z: 5,
+    alive: true,
+    invincible: 0,
+    shieldLeft: 0,
+    hp: 1,
+    team: "enemy",
+    hit() {
+      this.hp--;
+      if (this.hp <= 0) {
+        this.alive = false;
+        g.onTankDestroyed(this);
+      }
+    },
+  };
   g.enemies.push(stub);
   // Call the bomb branch directly.
   const origEffects = g.effects;
@@ -230,8 +244,7 @@ test("Map presets are well-formed 26x26 grids", () => {
 test("ENDLESS scaling constants produce tightening curves", () => {
   for (let w = 1; w < 10; w++) {
     const fireMul =
-      ENDLESS.fireMultiplierBase /
-      (1 + ENDLESS.fireMultiplierDecay * (w - 1));
+      ENDLESS.fireMultiplierBase / (1 + ENDLESS.fireMultiplierDecay * (w - 1));
     assert.ok(fireMul > 0);
     assert.ok(fireMul < 1.01);
   }
@@ -258,7 +271,8 @@ test("Leaderboard sorts by score descending and caps the list", () => {
 
 test("POWERUPS has six entries with positive durations for timed buffs", () => {
   assert.equal(Object.keys(POWERUPS).length, 6);
-  for (const k of ["star", "bomb", "tank"]) assert.equal(POWERUPS[k].duration, 0);
+  for (const k of ["star", "bomb", "tank"])
+    assert.equal(POWERUPS[k].duration, 0);
   for (const k of ["helmet", "clock", "shovel"])
     assert.ok(POWERUPS[k].duration > 0);
 });

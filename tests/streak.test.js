@@ -23,8 +23,12 @@ function stubGame() {
       burst() {},
       shake() {},
       slowMo() {},
-      slowMoScale() { return 1; },
-      shakeOffset() { return { x: 0, z: 0 }; },
+      slowMoScale() {
+        return 1;
+      },
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
     },
     scorePopup() {},
     updateUI() {},
@@ -148,7 +152,8 @@ test("updateUI hides the streak badge while multiplier is x1 and toggles 'hot' a
     const active = g.streakMult > 1;
     g.ui["streak-badge"].hidden = !active;
     g.ui["streak-badge"].classList.toggle("hot", g.streakMult >= 3);
-    if (g.ui["streak-mult"]) g.ui["streak-mult"].textContent = `×${g.streakMult}`;
+    if (g.ui["streak-mult"])
+      g.ui["streak-mult"].textContent = `×${g.streakMult}`;
     hidden = g.ui["streak-badge"].hidden;
     text = g.ui["streak-mult"].textContent;
   };
@@ -202,7 +207,12 @@ test("snapshot exposes killStreak and streakMult additively", () => {
     pickups: [],
     spawned: 0,
     map: { base: { alive: true } },
-    renderer: { info: { render: { calls: 0, triangles: 0 }, memory: { geometries: 0, textures: 0 } } },
+    renderer: {
+      info: {
+        render: { calls: 0, triangles: 0 },
+        memory: { geometries: 0, textures: 0 },
+      },
+    },
     fps: 60,
   });
   assert.equal(snap.killStreak, 4);

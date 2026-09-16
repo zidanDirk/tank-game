@@ -3,5 +3,8 @@ dist/
 .DS_Store
 *.log
 scripts/loop/current/
+scripts/loop/harvest/raw/
+scripts/loop/harvest/scored/
+scripts/loop/harvest/queue.md
 artifacts/loop-history/
 node_modules/.cache/

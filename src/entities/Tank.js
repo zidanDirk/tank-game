@@ -26,7 +26,9 @@ export class Tank {
     this.frozenUntil = 0;
     if (type === "player") this.level = 1;
     this.model =
-      type === "boss" ? bossTankModel(this.color, type) : tankModel(this.color, type);
+      type === "boss"
+        ? bossTankModel(this.color, type)
+        : tankModel(this.color, type);
     if (type === "boss") this.model.root.scale.setScalar(1.2);
     else this.model.root.scale.setScalar(0.85);
     game.scene.add(this.model.root);
@@ -117,7 +119,8 @@ export class Tank {
       this.model.paint.emissiveIntensity = 0.8;
     } else if (shieldOn) {
       this.model.paint.emissive.setHex(0xb4d8ff);
-      this.model.paint.emissiveIntensity = 0.4 + 0.2 * Math.sin(this.game.time * 6);
+      this.model.paint.emissiveIntensity =
+        0.4 + 0.2 * Math.sin(this.game.time * 6);
     } else {
       this.model.paint.emissive.setHex(0x000000);
       this.model.paint.emissiveIntensity = 0;

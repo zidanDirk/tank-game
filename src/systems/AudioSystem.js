@@ -40,6 +40,23 @@ const WAVE = {
   clock: "sine",
   shovel: "square",
 };
+// Mobile haptic patterns in milliseconds. Use 0 for events that should NOT
+// vibrate (e.g. brick chips are too spammy). Patterns may be arrays for the
+// Vibration API's on/off pulse form.
+const VIBRATE = {
+  shoot: 8,
+  hit: 45,
+  brick: 0,
+  explosion: 120,
+  start: 0,
+  "pickup-spawn": 0,
+  powerup: 30,
+  levelup: [50, 25, 50],
+  shield: 25,
+  bomb: 220,
+  clock: 30,
+  shovel: 30,
+};
 
 export class AudioSystem {
   constructor() {
@@ -66,6 +83,9 @@ export class AudioSystem {
     return this.muted;
   }
   play(kind) {
+    // Haptic fires BEFORE the audio early-return so it still triggers when the
+    // sound is muted (independent channel for accessibility on touch devices).
+    this.vibrate(kind);
     if (!this.context || this.context.state !== "running" || this.muted) return;
     const c = this.context,
       t = c.currentTime;
@@ -86,5 +106,22 @@ export class AudioSystem {
       o.disconnect();
       g.disconnect();
     };
+  }
+  vibrate(kind) {
+    if (typeof navigator === "undefined") return;
+    if (typeof navigator.vibrate !== "function") return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const p = VIBRATE[kind];
+    if (p === undefined || p === 0) return;
+    try {
+      navigator.vibrate(p);
+    } catch {
+      /* vibrate may throw in insecure contexts — ignore. */
+    }
   }
 }

@@ -204,8 +204,7 @@ export class MapManager {
       this.waterMesh = merged(this.root, water, mat(0x72aab0, 0.27, 0.22));
       this.waterMesh.castShadow = false;
     }
-    if (ripples.length)
-      merged(this.root, ripples, mat(0xb4d4ce));
+    if (ripples.length) merged(this.root, ripples, mat(0xb4d4ce));
     this.eagle = eagleModel();
     this.eagle.position.set(13, 0, 23);
     this.root.add(this.eagle);
@@ -266,7 +265,8 @@ export class MapManager {
     this.steelInstances.clear();
     const m = new THREE.Matrix4();
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (let i = 0; i < this.bricks.count; i++) this.bricks.setMatrixAt(i, zero);
+    for (let i = 0; i < this.bricks.count; i++)
+      this.bricks.setMatrixAt(i, zero);
     for (let i = 0; i < this.steelsMesh.count; i++)
       this.steelsMesh.setMatrixAt(i, zero);
     let bi = 0;
@@ -347,7 +347,10 @@ export class MapManager {
         this.cells[this.index(t.x, t.z)] = t.prev;
         const i = this.steelInstances.get(this.index(t.x, t.z));
         if (i !== undefined) {
-          this.steelsMesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+          this.steelsMesh.setMatrixAt(
+            i,
+            new THREE.Matrix4().makeScale(0, 0, 0),
+          );
           this.steelInstances.delete(this.index(t.x, t.z));
         }
       }

@@ -127,8 +127,10 @@ export class GameManager {
       ].map((id) => [id, document.getElementById(id)]),
     );
     // Damage vignette lives outside the ui map because it is queried lazily.
-    this.damageVignette = this.container?.querySelector?.(".damage-vignette") ?? null;
-    this.scoreLayer = this.container?.querySelector?.(".score-popup-layer") ?? null;
+    this.damageVignette =
+      this.container?.querySelector?.(".damage-vignette") ?? null;
+    this.scoreLayer =
+      this.container?.querySelector?.(".score-popup-layer") ?? null;
     this.ui["primary-btn"].addEventListener("click", () => {
       this.audio.unlock();
       if (this.state === "ready") {
@@ -239,10 +241,9 @@ export class GameManager {
     this.map = buildPresetMap(this.scene, preset, this.rng);
     this.collision = new CollisionSystem(this.map, () => this.tanks);
     this.player = new PlayerTank(this, 9.5, 23.5);
-    this.lives =
-      this.modifiers.find((m) => m.id === "iron")
-        ? 1
-        : Math.min(ENDLESS.livesMax, 3 + Math.floor((wave - 1) / 3));
+    this.lives = this.modifiers.find((m) => m.id === "iron")
+      ? 1
+      : Math.min(ENDLESS.livesMax, 3 + Math.floor((wave - 1) / 3));
     this.score = 0;
     this.kills = 0;
     this.spawned = 0;
@@ -260,7 +261,8 @@ export class GameManager {
   }
   tuningForWave(wave) {
     const fireMul =
-      ENDLESS.fireMultiplierBase / (1 + ENDLESS.fireMultiplierDecay * (wave - 1));
+      ENDLESS.fireMultiplierBase /
+      (1 + ENDLESS.fireMultiplierDecay * (wave - 1));
     const speedMul = 1 + ENDLESS.speedGrowth * (wave - 1);
     this.levelConfig = {
       number: wave,
@@ -311,11 +313,7 @@ export class GameManager {
         continue;
       const type = this.levelConfig.sequence[this.spawned];
       const Class =
-        type === "boss"
-          ? BossTank
-          : type === "armor"
-            ? ArmorTank
-            : EnemyTank;
+        type === "boss" ? BossTank : type === "armor" ? ArmorTank : EnemyTank;
       this.enemies.push(new Class(this, type, x, z));
       this.spawned++;
       return true;
@@ -535,7 +533,8 @@ export class GameManager {
       if (this.kills >= total) {
         if (this.mode === "endless") this.advanceEndlessWave();
         else if (this.levelIndex < LEVELS.length - 1) this.completeLevel();
-        else this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
+        else
+          this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
       }
       if (
         this.levelConfig?.allowPowerups &&
@@ -659,7 +658,8 @@ export class GameManager {
   setOverlay(state, reason) {
     this.ui.overlay.hidden = !state;
     if (this.ui["leaderboard"]) {
-      this.ui["leaderboard"].hidden = state !== "lost" || this.mode !== "endless";
+      this.ui["leaderboard"].hidden =
+        state !== "lost" || this.mode !== "endless";
     }
     if (!state) return;
     const content = {
@@ -697,7 +697,9 @@ export class GameManager {
     this.ui.lives.textContent =
       "♥ ".repeat(Math.max(0, this.lives)) +
       "♡ ".repeat(Math.max(0, ENDLESS.livesMax - this.lives));
-    this.ui["base-status"].textContent = this.map.base.alive ? "完好" : "已摧毁";
+    this.ui["base-status"].textContent = this.map.base.alive
+      ? "完好"
+      : "已摧毁";
     this.ui["base-status"].style.color = this.map.base.alive ? "" : "#a24e38";
     const stage =
       this.mode === "endless"
@@ -841,7 +843,9 @@ export class GameManager {
     this.camera.updateProjectionMatrix();
   }
   frame(ms) {
-    const rawDt = this.lastTime ? Math.min((ms - this.lastTime) / 1000, 0.1) : 0;
+    const rawDt = this.lastTime
+      ? Math.min((ms - this.lastTime) / 1000, 0.1)
+      : 0;
     this.lastTime = ms;
     // Bullet-time scales the simulation rate, not wall-clock; multiply
     // before the accumulator so the fixed-step loop naturally runs slower.
@@ -929,7 +933,8 @@ function buildPresetMap(scene, preset, rng) {
     m.bricks.instanceMatrix.needsUpdate = true;
   }
   if (m.steelsMesh) {
-    for (let i = 0; i < m.steelsMesh.count; i++) m.steelsMesh.setMatrixAt(i, zero);
+    for (let i = 0; i < m.steelsMesh.count; i++)
+      m.steelsMesh.setMatrixAt(i, zero);
     m.steelsMesh.count = 0;
     m.steelsMesh.instanceMatrix.needsUpdate = true;
   }

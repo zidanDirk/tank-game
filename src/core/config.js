@@ -12,8 +12,22 @@ export const TYPES = {
   light: { color: 0xb65c48, speed: 2.9, hp: 1, cooldown: 2, score: 100 },
   heavy: { color: 0x66637d, speed: 1.45, hp: 3, cooldown: 2.5, score: 300 },
   rapid: { color: 0x995474, speed: 2.2, hp: 1, cooldown: 0.95, score: 200 },
-  armor: { color: 0x8a6a5a, speed: 1.6, hp: 6, cooldown: 1.5, score: 400, multiShot: 2 },
-  boss: { color: 0x4a3a2a, speed: 0.9, hp: 12, cooldown: 1.6, score: 1500, multiShot: 3 },
+  armor: {
+    color: 0x8a6a5a,
+    speed: 1.6,
+    hp: 6,
+    cooldown: 1.5,
+    score: 400,
+    multiShot: 2,
+  },
+  boss: {
+    color: 0x4a3a2a,
+    speed: 0.9,
+    hp: 12,
+    cooldown: 1.6,
+    score: 1500,
+    multiShot: 3,
+  },
 };
 
 // Player tank upgrade levels (Battle City classic).

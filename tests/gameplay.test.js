@@ -18,7 +18,9 @@ function fixture() {
       explode() {},
       smoke() {},
       shake() {},
-      shakeOffset() { return { x: 0, z: 0 }; },
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
       shakeReset() {},
     },
     scorePopup() {},
@@ -173,7 +175,9 @@ test("twelve scored kills win the mission; the third lost player life ends it", 
     effects: {
       burst() {},
       shake() {},
-      shakeOffset() { return { x: 0, z: 0 }; },
+      shakeOffset() {
+        return { x: 0, z: 0 };
+      },
     },
     scorePopup() {},
     updateUI() {},

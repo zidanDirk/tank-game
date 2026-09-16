@@ -56,7 +56,9 @@ test("frame() multiplies the wall-clock dt by the active slowMoScale", () => {
     },
   };
   const frame = (ms) => {
-    const rawDt = game.lastTime ? Math.min((ms - game.lastTime) / 1000, 0.1) : 0;
+    const rawDt = game.lastTime
+      ? Math.min((ms - game.lastTime) / 1000, 0.1)
+      : 0;
     game.lastTime = ms;
     const dt = rawDt * game.effects.slowMoScale();
     capturedDt = dt;
@@ -112,12 +114,30 @@ test("kills reaching streakMult >= 3 trigger Effects.slowMo", () => {
   // Three kills within the streak window: first two should NOT trigger slowMo,
   // the third (streakMult === 3) should.
   g.time = 1;
-  GameManager.prototype.onTankDestroyed.call(g, { team: "enemy", type: "light", x: 10, z: 10, score: 100 });
+  GameManager.prototype.onTankDestroyed.call(g, {
+    team: "enemy",
+    type: "light",
+    x: 10,
+    z: 10,
+    score: 100,
+  });
   assert.equal(slowMoArgs, null);
   g.time = 2;
-  GameManager.prototype.onTankDestroyed.call(g, { team: "enemy", type: "light", x: 10, z: 10, score: 100 });
+  GameManager.prototype.onTankDestroyed.call(g, {
+    team: "enemy",
+    type: "light",
+    x: 10,
+    z: 10,
+    score: 100,
+  });
   assert.equal(slowMoArgs, null);
   g.time = 3;
-  GameManager.prototype.onTankDestroyed.call(g, { team: "enemy", type: "light", x: 10, z: 10, score: 100 });
+  GameManager.prototype.onTankDestroyed.call(g, {
+    team: "enemy",
+    type: "light",
+    x: 10,
+    z: 10,
+    score: 100,
+  });
   assert.deepEqual(slowMoArgs, { durationMs: 300, scale: 0.3 });
 });

@@ -86,3 +86,53 @@ npm run loop:commit   # 把当前 cycle 标记为 done，写 journal
 - 移动端 haptic feedback
 - Web Audio 程序化 BGM
 - 每日 seed 分享
+
+## Harvest Intake（自动从网络打捞 idea）
+
+让 loop 不会再卡在"等人类写 idea"。每个 cycle 之前（当 `items[]` 和 `ideas[]` 都空，或上次 harvest >7 天），触发三步流水线：
+
+```
+harvester  →  critic  →  queue.md  →  🧑 human  →  backlog.json.ideas[]
+```
+
+### 命令
+
+```bash
+npm run loop:harvest             # 跑 fetch + score + 渲染 queue.md
+npm run loop:harvest:review -- \ # 应用人类决策
+  --accept 1,4 \
+  --defer 2,5 \
+  --drop 3 --reason "already exists"
+```
+
+### 三步协议
+
+| 步 | 角色 | 工具 | 写 |
+|---|---|---|---|
+| 1. fetch | `tank-harvester` agent | WebSearch + WebFetch | `scripts/loop/harvest/raw/<date>.json` |
+| 2. score | `tank-critic` agent | Read only | `scripts/loop/harvest/scored/<date>.json` |
+| 3. review | 🧑 人类 | 任意编辑器 + 上面那条 CLI | `backlog.json.ideas[]` + `state.harvest_runs[]` |
+
+**硬约束**：
+- harvester ≠ critic ≠ reviewer（写 ≠ 审 ≠ 决策）
+- 任何 idea 都必须人类 accept 才能进 `backlog.json.ideas[]`
+- 进了 `ideas[]` 之后才由 `tank-triage` 在下次 `loop:next` 时挑进 `items[]`
+- 没有任何路径自动把 harvested idea 提升成 `items[]` entry
+
+### Allowlist
+
+写在 `scripts/loop/lib/sources.mjs`。白名单制：
+- Tier 1（trust ≥ 0.85）：gdcvault.com, developer.mozilla.org, web.dev, threejs.org
+- Tier 2（trust 0.7–0.85）：discourse.threejs.org, github.com（需 topic ∈ {three.js, webgame, webgl, gamedev}）, playdate.com
+- Tier 3（trust < 0.7，必须打 `low_trust` 标记）：indiegameplus.com
+- ❌ 明确拒绝：reddit.com, twitter.com, x.com, medium.com
+
+### Cron 触发（可选）
+
+手动建一个每周一次的任务让 harvest 自动跑：
+
+```
+CronCreate: 0 9 * * 1  "npm run loop:harvest"   # 每周一 9:xx 跑
+```
+
+跑完后状态变 `await_human_review`，loop 主流程会停下来等人类决策，不会自动 commit。

@@ -153,12 +153,31 @@
       "skill": "tank-ui-juice",
       "done_at": "2026-09-14T10:43:08.470Z",
       "commit": "8fb3ff9"
+    },
+    {
+      "id": "ui-08-haptic",
+      "title": "移动端 navigator.vibrate 触觉反馈",
+      "dimension": "ui-ux",
+      "touches": [
+        "src/systems/AudioSystem.js",
+        "tests/haptic.test.js"
+      ],
+      "verify": [
+        "AudioSystem.play fires navigator.vibrate per kind (when supported)",
+        "reduced-motion preference disables vibration",
+        "vibrate is a no-op when navigator.vibrate is unavailable",
+        "vibrate still fires when audio is muted"
+      ],
+      "estimate": "XS",
+      "status": "done",
+      "skill": "tank-ui-juice",
+      "done_at": "2026-09-16T04:36:01.876Z",
+      "commit": "3c03c93"
     }
   ],
   "ideas": [
     "启用 MODIFIERS（fog/iron/rapid/siege）四选一 ready 屏选择面板",
     "关卡结算统计面板（击杀 / 用时 / 道具使用 / 命中率）",
-    "移动端 haptic feedback（navigator.vibrate）",
     "Web Audio 程序化 BGM（military march 风格）",
     "无尽模式每日挑战 seed 分享（URL hash）",
     "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）"

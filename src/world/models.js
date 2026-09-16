@@ -233,7 +233,10 @@ export function pickupBomb() {
 }
 export function pickupTank() {
   const root = new THREE.Group();
-  const hull = new THREE.Mesh(box(0.45, 0.18, 0.7, 0, 0.16, 0), mat(0x9bbf5a, 0.6, 0.1));
+  const hull = new THREE.Mesh(
+    box(0.45, 0.18, 0.7, 0, 0.16, 0),
+    mat(0x9bbf5a, 0.6, 0.1),
+  );
   root.add(hull);
   const turret = new THREE.Mesh(
     new THREE.CylinderGeometry(0.16, 0.16, 0.12, 10),

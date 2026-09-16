@@ -13,6 +13,15 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import { captureBaselines, captureState } from "./lib/capture.mjs";
 import { runDiff, summarize } from "./lib/diff.mjs";
+import {
+  runHarvest,
+  scoreRaw,
+  renderQueue,
+  applyHumanReview,
+  parseReviewArgs,
+  shouldHarvest,
+  latestScoredPath,
+} from "./lib/harvest.mjs";
 
 const ROOT = process.cwd();
 const LOOP_DIR = path.join(ROOT, "scripts/loop");
@@ -63,6 +72,17 @@ async function cmdNext() {
   const backlog = await readJSON(BACKLOG_PATH);
   const pending = backlog.items.filter((it) => it.status === "pending");
   if (!pending.length) {
+    // Both items[] and ideas[] empty → must harvest before triage has anything to pick.
+    const decision = shouldHarvest({ state, backlog });
+    if (decision.trigger) {
+      console.log(
+        `✓ backlog empty AND ideas[] empty — triggering harvest (${decision.reason}).`,
+      );
+      console.log(`  Run:  npm run loop:harvest`);
+      state.next_action = "harvest_first";
+      await writeJSON(STATE_PATH, state);
+      return;
+    }
     console.log("✓ backlog empty. Pick from backlog.json.ideas to grow it.");
     state.next_action = "triage_new_idea";
     await writeJSON(STATE_PATH, state);
@@ -170,6 +190,137 @@ async function cmdDiff() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
+async function cmdHarvest() {
+  const state = await readJSON(STATE_PATH);
+  const backlog = await readJSON(BACKLOG_PATH);
+
+  // Sub-step 1: harvest (delegated to tank-harvester agent in production).
+  // For headless / test runs we accept a HARVEST_SEED env var with a JSON array.
+  const existingTitles = (backlog.ideas || []).map((it) => it.title || "");
+  let seed;
+  if (process.env.HARVEST_SEED) {
+    try {
+      seed = JSON.parse(process.env.HARVEST_SEED);
+    } catch (e) {
+      console.error("✗ HARVEST_SEED is not valid JSON:", e.message);
+      process.exit(1);
+    }
+  }
+  let rawResult;
+  try {
+    rawResult = await runHarvest({
+      sources: process.env.HARVEST_SOURCES?.split(",").filter(Boolean) || [],
+      seed,
+      existingTitles,
+    });
+  } catch (e) {
+    console.error("✗ harvest failed:", e.message);
+    if (/requires `seed`/.test(e.message)) {
+      console.error(
+        "  hint: provide HARVEST_SEED (JSON array) for headless runs,\n" +
+          "        or invoke this command from a /loop tick where the tank-harvester\n" +
+          "        agent supplies the array.",
+      );
+    }
+    process.exit(1);
+  }
+  console.log(`→ loop:harvest  step 1 fetch: ${rawResult.count} ideas (dropped ${rawResult.dropped_duplicates} duplicates)`);
+  console.log(`  ${rawResult.outPath}`);
+
+  // Sub-step 2: score (delegated to tank-critic agent in production).
+  let scoredSeed;
+  if (process.env.SCORE_SEED) {
+    try {
+      scoredSeed = JSON.parse(process.env.SCORE_SEED);
+    } catch (e) {
+      console.error("✗ SCORE_SEED is not valid JSON:", e.message);
+      process.exit(1);
+    }
+  }
+  let scoreResult;
+  try {
+    scoreResult = await scoreRaw({
+      rawPath: rawResult.outPath,
+      seed: scoredSeed,
+      topN: 5,
+    });
+  } catch (e) {
+    console.error("✗ scoring failed:", e.message);
+    process.exit(1);
+  }
+  console.log(`→ loop:harvest  step 2 score: ${scoreResult.top.length} top of ${scoreResult.total}`);
+  console.log(`  ${scoreResult.outPath}`);
+
+  // Sub-step 3: render queue for human.
+  const queuePath = path.join(LOOP_DIR, "harvest", "queue.md");
+  await renderQueue({ scoredPath: scoreResult.outPath, outPath: queuePath });
+  console.log(`→ loop:harvest  step 3 render: ${queuePath}`);
+
+  // Update state — halt here, wait for human.
+  state.harvest_runs = state.harvest_runs || [];
+  state.harvest_runs.push({
+    id: (() => {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+    })(),
+    raw_ref: path.relative(LOOP_DIR, rawResult.outPath),
+    scored_ref: path.relative(LOOP_DIR, scoreResult.outPath),
+    raw_count: rawResult.count,
+    scored_top_count: scoreResult.top.length,
+    human_decisions: null,
+    at: new Date().toISOString(),
+  });
+  state.next_action = "await_human_review";
+  await writeJSON(STATE_PATH, state);
+  console.log("");
+  console.log("✓ HARVEST READY — awaiting human review");
+  console.log(`  Read:    ${queuePath}`);
+  console.log(`  Apply:   npm run loop:harvest:review -- --accept 1,4 --drop 3 --reason "..."`);
+}
+
+async function cmdHarvestReview() {
+  // Args after "--" are parsed by parseReviewArgs (--accept, --defer, --drop --reason).
+  const argv = process.argv.slice(3);
+  // strip a leading "--" if the user passed it
+  if (argv[0] === "--") argv.shift();
+  const review = parseReviewArgs(argv);
+
+  if (
+    !review.accepted.length &&
+    !review.deferred.length &&
+    !review.dropped.length
+  ) {
+    console.error(
+      "✗ no decisions. Pass at least one of --accept, --defer, --drop.",
+    );
+    console.error(
+      '  example: npm run loop:harvest:review -- --accept 1 --drop 2 --reason "no"',
+    );
+    process.exit(1);
+  }
+
+  const scoredPath = await latestScoredPath();
+  if (!scoredPath) {
+    console.error("✗ no scored file in scripts/loop/harvest/scored/. Run `npm run loop:harvest` first.");
+    process.exit(1);
+  }
+
+  const out = await applyHumanReview({
+    scoredPath,
+    review,
+    backlogPath: BACKLOG_PATH,
+    statePath: STATE_PATH,
+  });
+  console.log(
+    `✓ review applied: accepted=${out.accepted.length}, deferred=${out.deferred.length}, dropped=${out.dropped.length}`,
+  );
+  for (const a of out.accepted) console.log(`  ✓ accept ${a.id}  ${a.title}`);
+  for (const d of out.deferred) console.log(`  ⏸ defer  ${d.id}  ${d.title}`);
+  for (const d of out.dropped) console.log(`  ✗ drop   ${d.title}  (${review.reasons && Object.entries(review.reasons).find(([, v]) => v)?.[1] || ""})`);
+  console.log(`  state.next_action reset to "triage_new_idea"`);
+}
+
 async function cmdStatus() {
   const state = await readJSON(STATE_PATH);
   const backlog = await readJSON(BACKLOG_PATH);
@@ -267,6 +418,8 @@ const commands = {
   next: cmdNext,
   verify: cmdVerify,
   diff: cmdDiff,
+  harvest: cmdHarvest,
+  "harvest:review": cmdHarvestReview,
   status: cmdStatus,
   commit: cmdCommit,
 };
@@ -279,12 +432,14 @@ if (!commands[cmd]) {
       "Usage: node scripts/loop/orchestrator.mjs <command>",
       "",
       "Commands:",
-      "  init    capture initial baselines (one-time)",
-      "  next    pick next pending item, emit spec for Claude",
-      "  verify  run all 3 gates (unit + capture + diff)",
-      "  diff    visual diff only (PNG + snapshot JSON)",
-      "  status  print state + backlog + journal summary",
-      "  commit  mark cycle done, write journal/, advance state",
+      "  init            capture initial baselines (one-time)",
+      "  next            pick next pending item, emit spec for Claude",
+      "  verify          run all 3 gates (unit + capture + diff)",
+      "  diff            visual diff only (PNG + snapshot JSON)",
+      "  harvest         run web fetcher + scorer, render queue.md",
+      "  harvest:review  apply human accept/defer/drop to backlog.json",
+      "  status          print state + backlog + journal summary",
+      "  commit          mark cycle done, write journal/, advance state",
     ].join("\n"),
   );
   process.exit(cmd === "help" ? 0 : 1);
