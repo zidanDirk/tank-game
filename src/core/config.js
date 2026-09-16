@@ -56,6 +56,55 @@ export const POWERUPS = {
 };
 export const POWERUP_KEYS = Object.keys(POWERUPS);
 
+// Persistent upgrades chosen between campaign stages and every three endless
+// waves. Effects stack for the current run only and are applied whenever a new
+// player tank is spawned.
+export const RUN_UPGRADES = {
+  overdrive: {
+    id: "overdrive",
+    icon: "⇧",
+    label: "履带超频",
+    description: "移动速度 +10%",
+    maxStacks: 3,
+  },
+  autoloader: {
+    id: "autoloader",
+    icon: "↻",
+    label: "自动装填",
+    description: "射击冷却 -12%",
+    maxStacks: 3,
+  },
+  velocity: {
+    id: "velocity",
+    icon: "➤",
+    label: "高速弹",
+    description: "炮弹速度 +15%",
+    maxStacks: 3,
+  },
+  piercing: {
+    id: "piercing",
+    icon: "◆",
+    label: "穿甲弹",
+    description: "炮弹伤害 +1",
+    maxStacks: 2,
+  },
+  scavenger: {
+    id: "scavenger",
+    icon: "✦",
+    label: "战场回收",
+    description: "道具掉率 +5%",
+    maxStacks: 3,
+  },
+  reactive: {
+    id: "reactive",
+    icon: "⬡",
+    label: "反应装甲",
+    description: "每次出生抵挡 1 次伤害",
+    maxStacks: 2,
+  },
+};
+export const RUN_UPGRADE_KEYS = Object.keys(RUN_UPGRADES);
+
 const levelOne = [
   "light",
   "light",

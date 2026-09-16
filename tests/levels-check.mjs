@@ -50,6 +50,11 @@ try {
     /第 1 关完成/,
   );
   await page.locator("#primary-btn").click();
+  await page.waitForFunction(
+    () => window.__TANK_GAME__.state === "upgrade-select",
+  );
+  assert.equal(await page.locator(".upgrade-choice").count(), 3);
+  await page.locator(".upgrade-choice").first().click();
   snapshot = await page.evaluate(() => window.__TANK_GAME__.snapshot());
   assert.equal(snapshot.state, "playing");
   assert.equal(snapshot.level, 2);
@@ -67,6 +72,11 @@ try {
 
   await clearCurrentLevel();
   await page.locator("#primary-btn").click();
+  await page.waitForFunction(
+    () => window.__TANK_GAME__.state === "upgrade-select",
+  );
+  assert.equal(await page.locator(".upgrade-choice").count(), 3);
+  await page.locator(".upgrade-choice").first().click();
   snapshot = await page.evaluate(() => window.__TANK_GAME__.snapshot());
   assert.equal(snapshot.level, 3);
   assert.equal(snapshot.levelName, "钢铁堡垒");
@@ -91,8 +101,9 @@ try {
   assert.equal(snapshot.state, "playing");
   assert.equal(snapshot.level, 1);
   assert.equal(snapshot.score, 0);
+  assert.deepEqual(snapshot.runUpgrades, []);
   console.log(
-    "PASS: three-stage progression, difficulty tuning, score carry, final victory, and campaign restart.",
+    "PASS: three-stage progression, run-upgrade choices, difficulty tuning, score carry, final victory, and campaign restart.",
   );
 } finally {
   await browser.close();

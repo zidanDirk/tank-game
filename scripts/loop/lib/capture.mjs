@@ -45,6 +45,17 @@ export const SHOTS = [
     wait: 400,
   },
   {
+    id: "upgrade-select",
+    setup: (g) => {
+      g.mode = "campaign";
+      g.resetRunUpgrades();
+      g.reset(0, false);
+      g.completeLevel();
+      g.presentUpgradeChoices({ kind: "campaign", nextLevel: 1 });
+    },
+    wait: 300,
+  },
+  {
     id: "lost",
     setup: (g) => {
       g.mode = "endless";

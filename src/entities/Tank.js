@@ -78,7 +78,7 @@ export class Tank {
     this.model.turret.position.z = 0.09;
     if (this.team === "player") this.game.audio.play("shoot");
   }
-  hit() {
+  hit(damage = 1) {
     if (!this.alive || this.invincible > 0) return;
     if (this.shieldLeft > 0) {
       this.shieldLeft = 0;
@@ -86,7 +86,14 @@ export class Tank {
       this.game.audio.play("shield");
       return;
     }
-    this.hp--;
+    if (this.team === "player" && this.armorCharges > 0) {
+      this.armorCharges--;
+      this.game.effects.burst(this.x, 0.8, this.z, 0x9bbf5a, 18, 0.8);
+      this.game.audio.play("shield");
+      this.game.syncRunUpgradeHud?.();
+      return;
+    }
+    this.hp -= Math.max(1, damage);
     this.flash = 0.15;
     this.game.effects.burst(this.x, 0.8, this.z, 0xffdc80, 12);
     this.game.audio.play("hit");
@@ -153,13 +160,17 @@ export class PlayerTank extends Tank {
     super(game, "player", x, z);
     this.level = Math.max(1, Math.min(level, PLAYER_MAX_LEVEL));
     this.applyLevelStats();
+    this.armorCharges = game.getRunUpgradeStacks?.("reactive") ?? 0;
   }
   applyLevelStats() {
     const cfg = PLAYER_LEVELS[this.level - 1];
-    this.speed = cfg.speed;
-    this.cooldown = cfg.cooldown;
+    const stacks = (id) => this.game.getRunUpgradeStacks?.(id) ?? 0;
+    this.speed = cfg.speed * (1 + stacks("overdrive") * 0.1);
+    this.cooldown = cfg.cooldown * Math.pow(0.88, stacks("autoloader"));
     this.multiShot = cfg.multiShot;
     this.breakSteel = cfg.breakSteel;
+    this.bulletSpeedMultiplier = 1 + stacks("velocity") * 0.15;
+    this.damage = 1 + stacks("piercing");
   }
   upgrade() {
     if (this.level >= PLAYER_MAX_LEVEL) return false;

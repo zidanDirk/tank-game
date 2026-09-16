@@ -10,7 +10,7 @@
     "levelName": "前线阵地",
     "levelIndex": 0,
     "levelTotal": 3,
-    "time": 2.33333333333333,
+    "time": 2.2666666666666635,
     "score": 0,
     "kills": 0,
     "lives": 3,
@@ -18,9 +18,11 @@
     "killStreak": 0,
     "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
-      "z": 20.698333333333405,
+      "z": 20.49333333333341,
       "alive": true,
       "aim": 0,
       "level": 1
@@ -29,13 +31,13 @@
       {
         "type": "light",
         "x": 2.5,
-        "z": 5.979999999999983,
+        "z": 6.173333333333314,
         "hp": 1
       },
       {
         "type": "light",
         "x": 23.5,
-        "z": 6.366666666666646,
+        "z": 6.173333333333314,
         "hp": 1
       },
       {
@@ -53,7 +55,7 @@
       "triangles": 21990,
       "geometries": 48,
       "textures": 3,
-      "fps": 23
+      "fps": 24
     }
   },
   "combat": {
@@ -64,7 +66,7 @@
     "levelName": "前线阵地",
     "levelIndex": 0,
     "levelTotal": 3,
-    "time": 0.7500000000000007,
+    "time": 0.7666666666666674,
     "score": 300,
     "kills": 1,
     "lives": 3,
@@ -72,6 +74,8 @@
     "killStreak": 1,
     "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -107,6 +111,8 @@
     "killStreak": 0,
     "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.705,
       "z": 23.5,
@@ -155,6 +161,8 @@
     "killStreak": 1,
     "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -197,6 +205,8 @@
     "killStreak": 0,
     "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,

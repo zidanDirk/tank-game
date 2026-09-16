@@ -29,17 +29,19 @@ export class BulletManager {
     }
     const vx = Math.sin(tank.aim),
       vz = -Math.cos(tank.aim);
+    const speed = 14 * (tank.bulletSpeedMultiplier ?? 1);
     const offsetX = vz * lateral;
     const offsetZ = vx * lateral;
     const b = {
       x: tank.x + offsetX,
       z: tank.z + offsetZ,
-      vx: vx * 14,
-      vz: vz * 14,
+      vx: vx * speed,
+      vz: vz * speed,
       team: tank.team,
       alive: true,
       life: 3,
       breakSteel: tank.breakSteel === true,
+      damage: tank.damage ?? 1,
       mesh: new THREE.Mesh(
         this.geometry,
         this.materials[tank.team] ?? this.materials.enemy,
@@ -107,7 +109,7 @@ export class BulletManager {
   impact(b, hit) {
     b.alive = false;
     this.disposeTrail(b);
-    if (hit.kind === "tank") hit.tank.hit();
+    if (hit.kind === "tank") hit.tank.hit(b.damage ?? 1);
     else if (hit.type === CELL.BRICK) {
       this.game.map.destroyBrick(hit.x, hit.z);
       this.game.effects.burst(b.x, 0.45, b.z, 0xc58457, 14);

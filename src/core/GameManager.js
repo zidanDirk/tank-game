@@ -13,6 +13,7 @@ import {
   CELL,
   SIZE,
   STREAK,
+  RUN_UPGRADES,
 } from "./config.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
@@ -28,6 +29,7 @@ import { BulletManager } from "../systems/BulletManager.js";
 import { Effects } from "../systems/Effects.js";
 import { AudioSystem } from "../systems/AudioSystem.js";
 import { Leaderboard } from "../systems/Leaderboard.js";
+import { RunUpgradeSystem } from "../systems/RunUpgradeSystem.js";
 
 const _tmpVec = new THREE.Vector3();
 
@@ -48,6 +50,8 @@ export class GameManager {
     this.activeBuffs = new Map();
     this.wave = 0;
     this.modifiers = [];
+    this.runUpgrades = new RunUpgradeSystem();
+    this.pendingUpgradeTransition = null;
     this.endlessSeed = dailySeed();
     this.attempt = 1;
     this.boss = null;
@@ -119,11 +123,16 @@ export class GameManager {
         "mode-campaign",
         "mode-endless",
         "buff-tray",
+        "run-upgrade-tray",
         "boss-hp",
         "boss-hp-fill",
         "leaderboard",
         "streak-badge",
         "streak-mult",
+        "upgrade-choices",
+        "mode-toggle",
+        "overlay-panel",
+        "overlay-hint",
       ].map((id) => [id, document.getElementById(id)]),
     );
     // Damage vignette lives outside the ui map because it is queried lazily.
@@ -137,7 +146,12 @@ export class GameManager {
         if (this.mode === "campaign") this.start();
         else this.startEndless();
       } else if (this.state === "paused") this.togglePause();
-      else if (this.state === "level-clear") this.advanceLevel();
+      else if (this.state === "level-clear")
+        this.presentUpgradeChoices({
+          kind: "campaign",
+          nextLevel: this.levelIndex + 1,
+        });
+      else if (this.state === "upgrade-select") return;
       else if (this.state === "won") this.newCampaign();
       else if (this.state === "lost" && this.mode === "endless")
         this.retryEndless();
@@ -183,6 +197,81 @@ export class GameManager {
   get tanks() {
     return [this.player, ...this.enemies].filter((t) => t && t.alive);
   }
+  getRunUpgradeStacks(id) {
+    return this.runUpgrades.get(id);
+  }
+  resetRunUpgrades() {
+    this.runUpgrades.reset();
+    this.pendingUpgradeTransition = null;
+    this.syncRunUpgradeHud();
+  }
+  presentUpgradeChoices(transition) {
+    const choices = this.runUpgrades.roll(this.rng, 3);
+    if (!choices.length) {
+      this.continueAfterUpgrade(transition);
+      return;
+    }
+    this.pendingUpgradeTransition = transition;
+    this.state = "upgrade-select";
+    this.input.clear();
+    this.accumulator = 0;
+    this.setOverlay("upgrade-select");
+    this.renderUpgradeChoices();
+    this.updateUI();
+  }
+  renderUpgradeChoices() {
+    const root = this.ui["upgrade-choices"];
+    if (!root) return;
+    root.replaceChildren();
+    for (const [index, id] of this.runUpgrades.choices.entries()) {
+      const upgrade = RUN_UPGRADES[id];
+      const current = this.runUpgrades.get(id);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "upgrade-choice";
+      button.dataset.upgrade = id;
+      button.setAttribute(
+        "aria-label",
+        `${upgrade.label}，${upgrade.description}，当前 ${current} 级，选择后 ${current + 1} 级`,
+      );
+
+      const key = document.createElement("span");
+      key.className = "upgrade-choice-key";
+      key.textContent = String(index + 1).padStart(2, "0");
+      const icon = document.createElement("span");
+      icon.className = "upgrade-choice-icon";
+      icon.textContent = upgrade.icon;
+      const label = document.createElement("strong");
+      label.textContent = upgrade.label;
+      const description = document.createElement("small");
+      description.textContent = upgrade.description;
+      const level = document.createElement("span");
+      level.className = "upgrade-choice-level";
+      level.textContent = `LV ${current + 1} / ${upgrade.maxStacks}`;
+
+      button.append(key, icon, label, description, level);
+      button.addEventListener("click", () => this.selectRunUpgrade(id));
+      root.appendChild(button);
+    }
+    root.querySelector("button")?.focus();
+  }
+  selectRunUpgrade(id) {
+    if (this.state !== "upgrade-select") return false;
+    if (!this.runUpgrades.choices.includes(id)) return false;
+    if (!this.runUpgrades.apply(id)) return false;
+    const transition = this.pendingUpgradeTransition;
+    this.pendingUpgradeTransition = null;
+    this.audio.play("powerup");
+    this.syncRunUpgradeHud();
+    this.continueAfterUpgrade(transition);
+    return true;
+  }
+  continueAfterUpgrade(transition) {
+    if (!transition) return;
+    if (transition.kind === "campaign") this.advanceLevel();
+    else if (transition.kind === "endless")
+      this.beginEndlessWave(transition.nextWave);
+  }
   reset(levelIndex = this.levelIndex, preserveCampaign = true) {
     const nextLevel = Math.max(0, Math.min(levelIndex, LEVELS.length - 1));
     this.levelIndex = nextLevel;
@@ -219,6 +308,7 @@ export class GameManager {
     this.spawnEnemy(2);
     this.updateUI();
     this.syncBuffHud();
+    this.syncRunUpgradeHud();
   }
   resetEndless(wave = 1) {
     this.input.clear();
@@ -258,6 +348,7 @@ export class GameManager {
     this.spawnEnemy(2);
     this.updateUI();
     this.syncBuffHud();
+    this.syncRunUpgradeHud();
   }
   tuningForWave(wave) {
     const fireMul =
@@ -332,6 +423,7 @@ export class GameManager {
   }
   start() {
     if (this.state !== "ready") return;
+    this.resetRunUpgrades();
     this.state = "playing";
     this.audio.play("start");
     this.setOverlay();
@@ -339,6 +431,7 @@ export class GameManager {
   }
   startEndless() {
     if (this.state !== "ready") return;
+    this.resetRunUpgrades();
     this.audio.play("start");
     this.resetEndless(1);
     this.state = "playing";
@@ -438,6 +531,7 @@ export class GameManager {
         seed: this.endlessSeed,
         date: Date.now(),
         modifiers: this.modifiers.map((m) => m.id),
+        upgrades: this.runUpgrades.snapshot(),
       });
       this.renderLeaderboard();
     }
@@ -464,6 +558,7 @@ export class GameManager {
   newCampaign() {
     this.mode = "campaign";
     this.levelScoreStart = 0;
+    this.resetRunUpgrades();
     this.reset(0, false);
     this.state = "playing";
     this.audio.play("start");
@@ -473,6 +568,7 @@ export class GameManager {
   retryEndless() {
     this.attempt++;
     this.endlessSeed = dailySeed();
+    this.resetRunUpgrades();
     this.resetEndless(1);
     this.state = "playing";
     this.audio.play("start");
@@ -546,8 +642,9 @@ export class GameManager {
     this.updateUI();
   }
   powerupChance() {
-    if (this.mode === "endless") return ENDLESS.powerupDropChance;
-    return POWERUP_DROP_CHANCE;
+    const base =
+      this.mode === "endless" ? ENDLESS.powerupDropChance : POWERUP_DROP_CHANCE;
+    return Math.min(0.75, base + this.getRunUpgradeStacks("scavenger") * 0.05);
   }
   dropPickup(x, z) {
     const type = POWERUP_KEYS[Math.floor(this.rng() * POWERUP_KEYS.length)];
@@ -556,7 +653,15 @@ export class GameManager {
   }
   advanceEndlessWave() {
     const next = this.wave + 1;
+    if (this.wave > 0 && this.wave % 3 === 0) {
+      this.presentUpgradeChoices({ kind: "endless", nextWave: next });
+      return;
+    }
+    this.beginEndlessWave(next);
+  }
+  beginEndlessWave(next) {
     this.resetEndless(next);
+    this.state = "playing";
     this.audio.play("start");
     if (next % ENDLESS.bossEvery === 0) this.spawnBoss();
     this.setOverlay();
@@ -634,6 +739,25 @@ export class GameManager {
       tray.appendChild(slot);
     }
   }
+  syncRunUpgradeHud() {
+    const tray = this.ui?.["run-upgrade-tray"];
+    if (!tray) return;
+    tray.replaceChildren();
+    for (const { id, stacks } of this.runUpgrades.snapshot()) {
+      const upgrade = RUN_UPGRADES[id];
+      const slot = document.createElement("span");
+      slot.className = "run-upgrade-slot";
+      slot.dataset.upgrade = id;
+      slot.textContent = upgrade.icon;
+      const count = document.createElement("b");
+      const available =
+        id === "reactive" ? (this.player?.armorCharges ?? stacks) : stacks;
+      count.textContent = `×${available}`;
+      slot.appendChild(count);
+      slot.title = `${upgrade.label} · ${upgrade.description}`;
+      tray.appendChild(slot);
+    }
+  }
   renderLeaderboard() {
     if (!this.ui["leaderboard"]) return;
     const top = Leaderboard.top(ENDLESS.leaderboardSize);
@@ -657,6 +781,20 @@ export class GameManager {
   }
   setOverlay(state, reason) {
     this.ui.overlay.hidden = !state;
+    const selecting = state === "upgrade-select";
+    this.ui.overlay.classList.toggle("choosing-upgrade", selecting);
+    if (this.ui["upgrade-choices"])
+      this.ui["upgrade-choices"].hidden = !selecting;
+    if (this.ui["overlay-panel"])
+      this.ui["overlay-panel"].classList.toggle("choosing-upgrade", selecting);
+    if (this.ui["mode-toggle"])
+      this.ui["mode-toggle"].hidden = state !== "ready";
+    if (this.ui["primary-btn"]) this.ui["primary-btn"].hidden = selecting;
+    if (this.ui["overlay-hint"]) {
+      this.ui["overlay-hint"].textContent = selecting
+        ? "选择后立即进入下一战区 · 改装仅在本局生效"
+        : "WASD 移动 · SPACE 射击 · 吃道具升级";
+    }
     if (this.ui["leaderboard"]) {
       this.ui["leaderboard"].hidden =
         state !== "lost" || this.mode !== "endless";
@@ -675,8 +813,15 @@ export class GameManager {
       ],
       "level-clear": [
         `第 ${this.levelConfig.number} 关完成`,
+        "战场补给已经抵达。选择一项改装，强化本次战役构筑。",
+        "选择战地改装 ↗",
+      ],
+      "upgrade-select": [
+        "选择战地改装",
+        this.mode === "endless"
+          ? `第 ${this.wave} 波完成 · 三选一永久强化本次无尽挑战。`
+          : `第 ${this.levelConfig.number} 关完成 · 三选一永久强化本次战役。`,
         "",
-        `进入第 ${this.levelIndex + 2} 关 ↗`,
       ],
       won: ["阵地守住了", "", "再次出击 ↗"],
       lost: [
@@ -711,6 +856,7 @@ export class GameManager {
       playing: "作战中",
       paused: "已暂停",
       "level-clear": "关卡完成",
+      "upgrade-select": "选择改装",
       won: "任务完成",
       lost: "防线失守",
     }[this.state];
@@ -894,6 +1040,8 @@ export class GameManager {
       killStreak: this.killStreak ?? 0,
       streakMult: this.streakMult ?? 1,
       buffs: [...this.activeBuffs.keys()],
+      runUpgrades: this.runUpgrades?.snapshot?.() ?? [],
+      upgradeChoices: [...(this.runUpgrades?.choices ?? [])],
       player: {
         x: this.player.x,
         z: this.player.z,
