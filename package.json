@@ -21,7 +21,10 @@
     "loop:promote": "node scripts/loop/orchestrator.mjs promote",
     "loop:daily": "node scripts/loop/orchestrator.mjs harvest && node scripts/loop/orchestrator.mjs promote",
     "loop:status": "node scripts/loop/orchestrator.mjs status",
-    "loop:commit": "node scripts/loop/orchestrator.mjs commit"
+    "loop:commit": "node scripts/loop/orchestrator.mjs commit",
+    "herdr:start": "bash bin/start-claude-in-herdr.sh",
+    "herdr:status": "herdr agent list",
+    "herdr:explain": "herdr agent explain tank-claude"
   },
   "dependencies": {
     "three": "^0.185.1"
