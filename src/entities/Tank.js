@@ -100,6 +100,8 @@ export class Tank {
     if (this.team === "player") {
       this.game.effects.shake(180, 0.06);
       this.game.flashDamage();
+      // Brief stagger on enemies — gives the player a recoverable moment.
+      this.game.staggerEnemies?.(0.5);
     }
     if (this.hp <= 0) {
       this.alive = false;

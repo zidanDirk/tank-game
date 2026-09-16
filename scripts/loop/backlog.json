@@ -173,13 +173,58 @@
       "skill": "tank-ui-juice",
       "done_at": "2026-09-16T04:36:01.876Z",
       "commit": "3c03c93"
+    },
+    {
+      "id": "h-test-001-01",
+      "title": "Test idea: 玩家受击时短暂减速 enemies 0.5s",
+      "dimension": "gameplay",
+      "touches": [
+        "src/core/GameManager.js",
+        "src/systems/BulletManager.js"
+      ],
+      "verify": [
+        "unit tests cover the new behavior path",
+        "idea h-test-001 traceable in journal entry"
+      ],
+      "estimate": "XS",
+      "status": "done",
+      "skill": null,
+      "source": {
+        "idea_id": "h-test-001",
+        "url": "https://example.com",
+        "domain": "example.com",
+        "trust": 0.9
+      },
+      "created_at": "2026-09-16T09:05:38.023Z",
+      "done_at": "2026-09-16T12:02:22.689Z",
+      "commit": "c5cae6a"
     }
   ],
   "ideas": [
-    "启用 MODIFIERS（fog/iron/rapid/siege）四选一 ready 屏选择面板",
-    "关卡结算统计面板（击杀 / 用时 / 道具使用 / 命中率）",
-    "Web Audio 程序化 BGM（military march 风格）",
-    "无尽模式每日挑战 seed 分享（URL hash）",
-    "为 MODIFIERS 中 fog 实现视场遮罩（fog-of-war）"
+    {
+      "id": "h-test-001",
+      "title": "Test idea: 玩家受击时短暂减速 enemies 0.5s",
+      "category": "gameplay",
+      "estimate": "XS",
+      "human_status": "promoted",
+      "human_decision_at": "2026-09-16T09:05:24.177Z",
+      "source": {
+        "url": "https://example.com",
+        "domain": "example.com",
+        "trust": 0.9
+      },
+      "score": {
+        "feasibility": 4,
+        "novelty": 4,
+        "effort_fit": 5,
+        "domain_fit": 5,
+        "total": 18
+      },
+      "suggested_touches": [
+        "src/core/GameManager.js",
+        "src/systems/BulletManager.js"
+      ],
+      "promoted_at": "2026-09-16T09:05:38.023Z"
+    }
   ]
 }

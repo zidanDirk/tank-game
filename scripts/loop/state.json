@@ -107,13 +107,27 @@
       "commit": "3c03c93",
       "journal": "scripts/loop/journal/2026-09-16-1231.md",
       "at": "2026-09-16T04:36:01.877Z"
+    },
+    {
+      "id": "2026-09-16-1705",
+      "item_id": "h-test-001-01",
+      "verdict": "pass",
+      "commit": "c5cae6a",
+      "journal": "scripts/loop/journal/2026-09-16-1705.md",
+      "at": "2026-09-16T12:02:22.690Z"
     }
   ],
   "needs_human": false,
   "next_action": "run_loop_next",
-  "completed_items": 9,
+  "completed_items": 10,
   "failed_cycles_in_row": 0,
   "last_init_at": "2026-09-16T08:59:27.242Z",
   "last_completed_at": "2026-09-14T17:55:00Z",
-  "cycle_started_at": null
+  "cycle_started_at": null,
+  "last_promotion": {
+    "item_id": "h-test-001-01",
+    "idea_id": "h-test-001",
+    "at": "2026-09-16T09:05:38.023Z",
+    "by": "tank-promoter"
+  }
 }

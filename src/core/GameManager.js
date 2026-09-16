@@ -575,6 +575,16 @@ export class GameManager {
     this.setOverlay();
     this.updateUI();
   }
+  staggerEnemies(durationSeconds) {
+    const until = this.time + durationSeconds;
+    for (const e of this.enemies) {
+      if (e && e.alive) e.frozenUntil = Math.max(e.frozenUntil ?? 0, until);
+    }
+    if (this.boss && this.boss.alive) {
+      this.boss.frozenUntil = Math.max(this.boss.frozenUntil ?? 0, until);
+    }
+  }
+
   onTankDestroyed(tank) {
     if (tank.team === "player") {
       this.lives--;
