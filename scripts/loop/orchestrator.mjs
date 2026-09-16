@@ -22,6 +22,7 @@ import {
   shouldHarvest,
   latestScoredPath,
 } from "./lib/harvest.mjs";
+import { pickAndPromote } from "./promote.mjs";
 
 const ROOT = process.cwd();
 const LOOP_DIR = path.join(ROOT, "scripts/loop");
@@ -338,6 +339,22 @@ async function cmdStatus() {
   }
 }
 
+async function cmdPromote() {
+  // Bridge: turn the next human-accepted idea into a pending items[] entry.
+  // Logic lives in promote.mjs so the agent role (`tank-promoter`) and the
+  // CLI share one implementation.
+  const out = await pickAndPromote({ backlogPath: BACKLOG_PATH, statePath: STATE_PATH });
+  if (out.skipped) {
+    console.log(`✓ promote: skipped (${out.reason})`);
+    console.log("  no human-accepted ideas to promote");
+    return;
+  }
+  console.log(`✓ promote: ${out.itemId} — ${out.item.title}`);
+  console.log(`  from idea ${out.idea.id} (${out.idea.category}, est ${out.idea.estimate})`);
+  console.log(`  touches: ${out.item.touches.join(", ")}`);
+  console.log("  next_action reset to run_loop_next");
+}
+
 async function cmdCommit() {
   const state = await readJSON(STATE_PATH);
   const backlog = await readJSON(BACKLOG_PATH);
@@ -420,6 +437,7 @@ const commands = {
   diff: cmdDiff,
   harvest: cmdHarvest,
   "harvest:review": cmdHarvestReview,
+  promote: cmdPromote,
   status: cmdStatus,
   commit: cmdCommit,
 };
@@ -438,6 +456,7 @@ if (!commands[cmd]) {
       "  diff            visual diff only (PNG + snapshot JSON)",
       "  harvest         run web fetcher + scorer, render queue.md",
       "  harvest:review  apply human accept/defer/drop to backlog.json",
+      "  promote         promote next human-accepted idea into items[]",
       "  status          print state + backlog + journal summary",
       "  commit          mark cycle done, write journal/, advance state",
     ].join("\n"),

@@ -12,7 +12,11 @@
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -42,7 +46,7 @@
       "triangles": 20870,
       "geometries": 39,
       "textures": 3,
-      "fps": 38
+      "fps": 34
     }
   },
   "active": {
@@ -53,12 +57,16 @@
     "levelName": "前线阵地",
     "levelIndex": 0,
     "levelTotal": 3,
-    "time": 0.9833333333333347,
+    "time": 0.9500000000000013,
     "score": 0,
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -88,7 +96,7 @@
       "triangles": 20870,
       "geometries": 39,
       "textures": 3,
-      "fps": 30
+      "fps": 28
     }
   },
   "paused": {
@@ -104,7 +112,11 @@
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -150,10 +162,14 @@
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [
       "helmet",
       "clock"
     ],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -199,7 +215,11 @@
     "kills": 0,
     "lives": 4,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -235,7 +255,7 @@
       "triangles": 34350,
       "geometries": 46,
       "textures": 3,
-      "fps": 24
+      "fps": 25
     }
   },
   "level-clear": {
@@ -251,7 +271,11 @@
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -281,11 +305,65 @@
       "triangles": 20870,
       "geometries": 39,
       "textures": 3,
-      "fps": 25
+      "fps": 26
+    }
+  },
+  "upgrade-select": {
+    "state": "upgrade-select",
+    "mode": "campaign",
+    "wave": 5,
+    "level": 1,
+    "levelName": "前线阵地",
+    "levelIndex": 0,
+    "levelTotal": 3,
+    "time": 0,
+    "score": 0,
+    "kills": 0,
+    "lives": 3,
+    "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
+    "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [
+      "reactive",
+      "piercing",
+      "overdrive"
+    ],
+    "player": {
+      "x": 9.5,
+      "z": 23.5,
+      "alive": true,
+      "aim": 0,
+      "level": 1
+    },
+    "enemies": [
+      {
+        "type": "light",
+        "x": 2.5,
+        "z": 2.5,
+        "hp": 1
+      },
+      {
+        "type": "light",
+        "x": 23.5,
+        "z": 2.5,
+        "hp": 1
+      }
+    ],
+    "bullets": 0,
+    "pickups": 0,
+    "spawned": 2,
+    "render": {
+      "calls": 73,
+      "triangles": 20870,
+      "geometries": 39,
+      "textures": 3,
+      "fps": 26
     }
   },
   "lost": {
-    "state": "level-clear",
+    "state": "upgrade-select",
     "mode": "endless",
     "wave": 1,
     "level": 1,
@@ -297,7 +375,15 @@
     "kills": 0,
     "lives": 3,
     "baseAlive": true,
+    "killStreak": 0,
+    "streakMult": 1,
     "buffs": [],
+    "runUpgrades": [],
+    "upgradeChoices": [
+      "reactive",
+      "piercing",
+      "overdrive"
+    ],
     "player": {
       "x": 9.5,
       "z": 23.5,
@@ -307,7 +393,7 @@
     },
     "enemies": [
       {
-        "type": "light",
+        "type": "rapid",
         "x": 2.5,
         "z": 2.5,
         "hp": 1
@@ -324,7 +410,7 @@
     "spawned": 2,
     "render": {
       "calls": 70,
-      "triangles": 32366,
+      "triangles": 32390,
       "geometries": 37,
       "textures": 3,
       "fps": 24

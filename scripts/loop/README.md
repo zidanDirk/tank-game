@@ -9,16 +9,19 @@
 ```
 scripts/loop/
 ├── orchestrator.mjs       # 循环驱动器
+├── promote.mjs            # 把 ideas[] 升格到 items[]
 ├── state.json             # 状态脊柱（spine）
 ├── backlog.json           # 改进队列
 ├── lib/
 │   ├── git.mjs            # worktree / commit helpers
 │   ├── server.mjs         # 启停 vite dev
 │   ├── capture.mjs        # snapshot JSON + 截图
-│   └── diff.mjs           # pixelmatch + JSON deep-equal
+│   ├── diff.mjs           # pixelmatch + JSON deep-equal
+│   ├── harvest.mjs        # fetch + score + review primitives
+│   └── sources.mjs        # harvest domain allowlist
 ├── baselines/             # 基线（git tracked）
 │   ├── snapshots.json
-│   └── screenshots/{ready,active,paused,buffs,boss,level-clear,lost}.png
+│   └── screenshots/{ready,active,paused,buffs,boss,level-clear,lost,upgrade-select}.png
 ├── current/               # 最新一次 verify 的产物（gitignored）
 │   ├── snapshots.json
 │   ├── screenshots/...
@@ -41,12 +44,16 @@ scripts/loop/
 ## 命令
 
 ```bash
-npm run loop:init     # 捕获基线（首次或大改后）
-npm run loop:next     # 从 backlog 选下一项，打印 spec 给 Claude 执行
-npm run loop:verify   # 跑三道门（unit + capture + diff）
-npm run loop:diff     # 只跑视觉 diff
-npm run loop:status   # 打印状态
-npm run loop:commit   # 把当前 cycle 标记为 done，写 journal
+npm run loop:init            # 捕获基线（首次或大改后）
+npm run loop:next            # 从 backlog 选下一项，打印 spec 给 Claude 执行
+npm run loop:verify          # 跑三道门（unit + capture + diff）
+npm run loop:diff            # 只跑视觉 diff
+npm run loop:harvest         # 跑 fetch + score + 渲染 queue.md
+npm run loop:harvest:review  # 应用人类 accept/defer/drop
+npm run loop:promote         # 把一条 human-accepted idea 升格成 pending items[]
+npm run loop:daily           # harvest + promote（一次性跑两步）
+npm run loop:status          # 打印状态
+npm run loop:commit          # 把当前 cycle 标记为 done，写 journal
 ```
 
 ## 典型一轮
@@ -127,12 +134,70 @@ npm run loop:harvest:review -- \ # 应用人类决策
 - Tier 3（trust < 0.7，必须打 `low_trust` 标记）：indiegameplus.com
 - ❌ 明确拒绝：reddit.com, twitter.com, x.com, medium.com
 
-### Cron 触发（可选）
+### Cron 触发（Claude Code CronCreate）
 
-手动建一个每周一次的任务让 harvest 自动跑：
+在 Claude Code 会话里用 `CronCreate` 工具创建定时任务：
 
 ```
-CronCreate: 0 9 * * 1  "npm run loop:harvest"   # 每周一 9:xx 跑
+CronCreate:
+  cron:    "30 10 * * *"          # 每天 10:30 本地时间
+  prompt:  "Run npm run loop:harvest, then check if any human-accepted ideas need promoting. If so run npm run loop:promote, then npm run loop:next."
+  recurring: true
 ```
 
-跑完后状态变 `await_human_review`，loop 主流程会停下来等人类决策，不会自动 commit。
+CronCreate 是 Claude Code 的内置定时器,只在 Claude Code 会话**运行时**触发。
+如果 10:30 时 Claude Code 关闭或电脑睡眠,当天的 tick 会丢失。
+
+落地清单：
+- `scripts/loop/promote.mjs` —— promotion 核心逻辑
+- `.claude/agents/tank-promoter.md` —— bridge agent（跑 promote.mjs）
+- CronCreate 调用方在 Claude Code 会话里
+
+如果以后想换成无人值守的 launchd,把 `promote.mjs` 和 `tank-promoter.md`
+留着即可,只需要再加一份 plist + 包装脚本。
+
+### Promotion：把 accepted idea 推进到实现队列
+
+`harvest:review` 之后，accepted idea 进 `backlog.ideas[]` 但还**不能**被
+`loop:next` 选中（`loop:next` 只看 `items[]`）。`tank-promoter` 是个 bridge agent，
+它跑 `node scripts/loop/promote.mjs` 把一条 accepted idea 升格成 `items[]` 中的
+pending 条目，再把 `state.next_action` 重置为 `run_loop_next`。`/loop` 提示词
+的第一步就是在每个 tick 检查是否需要 promote。
+
+选择规则（见 `promote.mjs`）：
+- 只升 `human_status === "accepted"` 的 idea
+- 优先 `XS > S > M > L` 的小活
+- 同 estimate 时按 `human_decision_at` 早优先（FIFO）
+
+### Daily flow（10:30 CronCreate + /loop 配合）
+
+```
+10:30 CronCreate 触发 (Claude Code 必须在跑)
+        ↓
+npm run loop:harvest  ──→ queue.md 渲染
+        ↓
+你跑 harvest:review -- --accept 1 --drop 2
+        ↓
+backlog.ideas[] 增加 accepted 条目
+        ↓
+/loop tick
+   ① tank-promoter: promoteIdea ──→ backlog.items[] pending
+   ② tank-triage:   loop:next   ──→ spec
+   ③ tank-maker:    改 touches 文件 + npm test
+   ④ loop:verify    ──→ 三道门
+   ⑤ loop:commit (pass) ──→ journal/, advance state
+```
+
+### CronCreate 触发的 prompt 模板
+
+```
+/loop 30m 你正在为 Tank 1990 推进 loop engineering 流水线。优先检查是否有 idea 待升格
+（state.next_action === "triage_new_idea" 且 ideas[] 有 accepted）→ 跑
+node scripts/loop/promote.mjs 升格；没有就跳过。然后 npm run loop:next 读 spec →
+阅读 tank-implement skill → 改 touches[] 文件加测试 → npm test → npm run loop:verify
+三道门 → 通过 npm run loop:commit；失败读 verify-report.json 修缺陷再 verify。规则：
+不要改 touches[] 外的文件、不要改 snapshot() 字段、不要降阈值、若 state.json.needs_human=true
+立即停下报告用户。如果 next_action === "harvest_first" → 跑 npm run loop:harvest 然后
+停下来等人类跑 npm run loop:harvest:review 后再回到 next。最后一句话报告：
+✓ item_id done / ✓ promoted idea_id / ✗ item_id failed: reason。
+```

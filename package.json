@@ -18,6 +18,8 @@
     "loop:diff": "node scripts/loop/orchestrator.mjs diff",
     "loop:harvest": "node scripts/loop/orchestrator.mjs harvest",
     "loop:harvest:review": "node scripts/loop/orchestrator.mjs harvest:review",
+    "loop:promote": "node scripts/loop/orchestrator.mjs promote",
+    "loop:daily": "node scripts/loop/orchestrator.mjs harvest && node scripts/loop/orchestrator.mjs promote",
     "loop:status": "node scripts/loop/orchestrator.mjs status",
     "loop:commit": "node scripts/loop/orchestrator.mjs commit"
   },
