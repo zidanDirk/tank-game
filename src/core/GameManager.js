@@ -189,6 +189,13 @@ export class GameManager {
     });
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
+    // Auto-pause when the tab/window goes hidden mid-battle — otherwise the
+    // player comes back to a lost base. Only triggers from `playing`; other
+    // states (ready / won / lost / level-clear / upgrade-select) stay as-is.
+    this._onVisibilityChange = () => this.handleVisibilityChange();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this._onVisibilityChange);
+    }
     this.reset();
     this.setOverlay("ready");
     this.resize();
@@ -452,6 +459,15 @@ export class GameManager {
     this.accumulator = 0;
     this.setOverlay(this.state === "paused" ? "paused" : undefined);
     this.updateUI();
+  }
+  handleVisibilityChange() {
+    // Auto-pause when the tab goes hidden. We deliberately don't auto-resume
+    // on visibility return — the player may be mid-thought and a sudden un-
+    // pause mid-bullet is worse than requiring one click to resume.
+    if (typeof document === "undefined") return;
+    if (document.visibilityState !== "hidden") return;
+    if (this.state !== "playing") return;
+    this.togglePause();
   }
   flashDamage() {
     if (typeof window !== "undefined" && window.matchMedia) {
