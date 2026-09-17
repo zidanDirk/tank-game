@@ -31,9 +31,34 @@
       },
       "fetched_urls_hash": "sha256:a5fc74706b567dcc",
       "at": "2026-09-14T10:38:17.657Z"
+    },
+    {
+      "id": "2026-09-17-0310",
+      "raw_ref": "harvest/raw/2026-09-17.json",
+      "scored_ref": "harvest/scored/2026-09-17.json",
+      "raw_count": 16,
+      "scored_top_count": 5,
+      "human_decisions": null,
+      "at": "2026-09-17T03:07:26.588Z"
+    },
+    {
+      "id": "2026-09-17-1123",
+      "scored_ref": "harvest/scored/2026-09-17.json",
+      "raw_count": 16,
+      "scored_top_count": 5,
+      "human_decisions": {
+        "accepted": 1,
+        "deferred": 0,
+        "dropped": 4,
+        "reasons": {
+          "5": "audio cluster 后处理"
+        }
+      },
+      "fetched_urls_hash": "sha256:9fffa1c63e0862f0",
+      "at": "2026-09-17T03:23:18.487Z"
     }
   ],
-  "last_human_review_at": "2026-09-14T10:38:17.657Z",
+  "last_human_review_at": "2026-09-17T03:23:18.487Z",
   "schema_migrated_at": "2026-09-14T18:30:00Z",
   "cycles": [
     {
@@ -115,19 +140,27 @@
       "commit": "c5cae6a",
       "journal": "scripts/loop/journal/2026-09-16-1705.md",
       "at": "2026-09-16T12:02:22.690Z"
+    },
+    {
+      "id": "2026-09-17-1123",
+      "item_id": "h-2026-09-17-002-01",
+      "verdict": "pass",
+      "commit": "2f2c8db",
+      "journal": "scripts/loop/journal/2026-09-17-1123.md",
+      "at": "2026-09-17T03:24:58.394Z"
     }
   ],
   "needs_human": false,
   "next_action": "run_loop_next",
-  "completed_items": 10,
+  "completed_items": 11,
   "failed_cycles_in_row": 0,
   "last_init_at": "2026-09-16T08:59:27.242Z",
-  "last_completed_at": "2026-09-14T17:55:00Z",
+  "last_completed_at": "2026-09-17T03:24:58Z",
   "cycle_started_at": null,
   "last_promotion": {
-    "item_id": "h-test-001-01",
-    "idea_id": "h-test-001",
-    "at": "2026-09-16T09:05:38.023Z",
+    "item_id": "h-2026-09-17-002-01",
+    "idea_id": "h-2026-09-17-002",
+    "at": "2026-09-17T03:23:26.993Z",
     "by": "tank-promoter"
   }
 }

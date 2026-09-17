@@ -198,6 +198,29 @@
       "created_at": "2026-09-16T09:05:38.023Z",
       "done_at": "2026-09-16T12:02:22.689Z",
       "commit": "c5cae6a"
+    },
+    {
+      "id": "h-2026-09-17-002-01",
+      "title": "Auto-pause game via Page Visibility API on tab hide",
+      "dimension": "meta",
+      "touches": [
+        "src/core/GameManager.js"
+      ],
+      "verify": [
+        "idea h-2026-09-17-002 traceable in journal entry"
+      ],
+      "estimate": "XS",
+      "status": "done",
+      "skill": null,
+      "source": {
+        "idea_id": "h-2026-09-17-002",
+        "url": "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+        "domain": "developer.mozilla.org",
+        "trust": 0.95
+      },
+      "created_at": "2026-09-17T03:23:26.993Z",
+      "done_at": "2026-09-17T03:24:58.394Z",
+      "commit": "2f2c8db"
     }
   ],
   "ideas": [
@@ -225,6 +248,32 @@
         "src/systems/BulletManager.js"
       ],
       "promoted_at": "2026-09-16T09:05:38.023Z"
+    },
+    {
+      "id": "h-2026-09-17-002",
+      "title": "Auto-pause game via Page Visibility API on tab hide",
+      "category": "meta",
+      "estimate": "XS",
+      "source": {
+        "url": "https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API",
+        "domain": "developer.mozilla.org",
+        "trust": 0.95,
+        "fetched_at": "2026-09-17T03:23:18.487Z"
+      },
+      "score": {
+        "feasibility": 5,
+        "novelty": 5,
+        "effort_fit": 5,
+        "domain_fit": 4,
+        "total": 19
+      },
+      "suggested_touches": [
+        "src/core/GameManager.js"
+      ],
+      "human_status": "promoted",
+      "human_decision_at": "2026-09-17T03:23:18.487Z",
+      "fetched_at": "2026-09-17T03:23:18.487Z",
+      "promoted_at": "2026-09-17T03:23:26.992Z"
     }
   ]
 }
