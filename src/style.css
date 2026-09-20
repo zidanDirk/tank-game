@@ -1853,3 +1853,177 @@ kbd {
     opacity: 0;
   }
 }
+
+/* Difficulty presets (issue-3) — 4 buttons inside the Ready overlay. */
+.difficulty-tier {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 18px;
+}
+.difficulty-btn {
+  border: 1px solid #cbd2bd;
+  background: #ecefe2;
+  color: var(--ink);
+  padding: 9px 6px 8px;
+  display: grid;
+  gap: 3px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.difficulty-btn small {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.4px;
+  color: #8a947e;
+  line-height: 1.3;
+}
+.difficulty-btn:hover,
+.difficulty-btn:focus-visible {
+  border-color: var(--orange);
+  background: #f4f3eb;
+  outline: 2px solid color-mix(in srgb, var(--orange) 35%, transparent);
+  outline-offset: 1px;
+}
+.difficulty-btn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #f4f3eb;
+}
+.difficulty-btn[aria-pressed="true"] small {
+  color: #c9d2b8;
+}
+.difficulty-btn[data-tier="iron-curtain"][aria-pressed="true"] {
+  background: #4a2a18;
+  border-color: var(--orange);
+}
+
+/* Threat badge (HUD top-left, below the run-upgrade tray). */
+.threat-badge {
+  position: absolute;
+  top: 56px;
+  left: 18px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #c1c9b1;
+  background: rgba(244, 243, 235, 0.92);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px #354b3221;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
+}
+.threat-badge[data-tone="hot"] {
+  border-color: var(--orange);
+  color: var(--orange);
+  background: rgba(218, 107, 56, 0.16);
+}
+.threat-badge[data-tone="intense"] {
+  border-color: #4a2a18;
+  color: #fbf5e8;
+  background: #4a2a18;
+}
+.threat-badge b {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* Threat briefing banner (top-centre overlay during wave start). */
+.threat-banner {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  z-index: 5;
+  pointer-events: none;
+  max-width: min(520px, 86%);
+  padding: 10px 18px;
+  border: 1px solid #c1c9b1;
+  background: rgba(244, 243, 235, 0.95);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  box-shadow: 0 6px 18px #354b3221;
+}
+.threat-banner.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.threat-banner[data-tone="alert"] {
+  border-color: var(--orange);
+  color: var(--orange);
+  background: rgba(251, 245, 232, 0.96);
+}
+.threat-banner[data-tone="critical"] {
+  border-color: #4a2a18;
+  color: #fbf5e8;
+  background: #4a2a18;
+}
+.threat-banner small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  color: #677f52;
+  margin-top: 4px;
+}
+.threat-banner[data-tone="alert"] small,
+.threat-banner[data-tone="critical"] small {
+  color: inherit;
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .threat-banner,
+  .threat-badge {
+    transition: none !important;
+  }
+  .threat-banner.show {
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Hidden helper for the screen-reader-only aria-live briefing node. */
+.briefing-aria {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.briefing-aria[aria-hidden="true"] {
+  display: none;
+}
+
+.difficulty-summary {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--orange);
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+  opacity: 0.85;
+}
