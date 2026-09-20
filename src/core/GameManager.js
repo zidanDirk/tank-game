@@ -35,6 +35,10 @@ import { Effects } from "../systems/Effects.js";
 import { AudioSystem } from "../systems/AudioSystem.js";
 import { Leaderboard } from "../systems/Leaderboard.js";
 import { RunUpgradeSystem } from "../systems/RunUpgradeSystem.js";
+import {
+  collectBriefingEntries,
+  pickTopBriefing,
+} from "./briefing.js";
 
 const _tmpVec = new THREE.Vector3();
 
@@ -70,6 +74,10 @@ export class GameManager {
     this._briefingTimer = 0;
     this._briefingTone = "polite";
     this._lastBriefingAt = -Infinity;
+    this._lastBriefingRefreshAt = -Infinity;
+    this._currentBriefingId = null;
+    this._bossJustSpawnedUntil = -Infinity;
+    this._briefingAriaTimer = 0;
     this._threatBannerEl = null;
     this._briefingAriaEl = null;
     this.renderer = new THREE.WebGLRenderer({
@@ -150,6 +158,7 @@ export class GameManager {
         "threat-badge-label",
         "threat-badge-mult",
         "threat-banner",
+        "battle-briefing",
       ].map((id) => [id, document.getElementById(id)]),
     );
     this._threatBannerEl =
@@ -159,6 +168,10 @@ export class GameManager {
     this._briefingAriaEl =
       document.getElementById("briefing-aria") ||
       this.container?.querySelector?.("#briefing-aria") ||
+      null;
+    this._battleBriefingEl =
+      this.ui["battle-briefing"] ||
+      this.container?.querySelector?.("#battle-briefing") ||
       null;
     // Damage vignette lives outside the ui map because it is queried lazily.
     this.damageVignette =
@@ -554,6 +567,8 @@ export class GameManager {
     this.updateUI();
     this.syncBuffHud();
     this.syncRunUpgradeHud();
+    this._lastBriefingRefreshAt = -Infinity;
+    this._currentBriefingId = null;
   }
   resetEndless(wave = 1) {
     this.input.clear();
@@ -597,6 +612,8 @@ export class GameManager {
     this.updateUI();
     this.syncBuffHud();
     this.syncRunUpgradeHud();
+    this._lastBriefingRefreshAt = -Infinity;
+    this._currentBriefingId = null;
   }
   tuningForWave(wave) {
     const scaling = computeEffectiveScaling(this.difficulty, wave);
@@ -659,6 +676,10 @@ export class GameManager {
     const boss = new BossTank(this, "boss", 12.5, 2.5);
     boss.maxHp = boss.hp;
     this.boss = boss;
+    // Flag the spawn window so the dynamic briefing can fire a one-shot
+    // critical ("Boss 已出现") that then naturally falls back to a soft
+    // warning when the boss is below 50% HP.
+    this._bossJustSpawnedUntil = this.time + 1.5;
     this.enemies.push(boss);
     this.audio.play("explosion");
     this.effects.burst(13, 1.6, 2.5, 0xffb48a, 30, 1.2);
@@ -726,6 +747,104 @@ export class GameManager {
         this._briefingTone = "polite";
       }
     }
+  }
+  // Dynamic battle briefing renderer. Drives #battle-briefing from the pure
+  // logic in `briefing.js`. Throttled to 0.5s so we don't rebuild entries
+  // every frame; pause freezes the current entry, other non-playing states
+  // (ready / lost / won / upgrade-select) clear so the text doesn't sit
+  // underneath an overlay.
+  refreshBriefing() {
+    if (this.state === "paused") return;
+    if (this.state !== "playing") {
+      this._clearBattleBriefing();
+      return;
+    }
+    if (this.time - this._lastBriefingRefreshAt < 0.5) return;
+    this._lastBriefingRefreshAt = this.time;
+    const entries = collectBriefingEntries(this._buildBriefingState());
+    // Pass `null` so pickTopBriefing always returns top — the renderer
+    // owns ID-based aria-live dedup so it can re-announce when the text
+    // changes within the same critical bucket.
+    const top = pickTopBriefing(entries, null);
+    if (!top) return;
+    const idChanged = top.id !== this._currentBriefingId;
+    this._currentBriefingId = top.id;
+    this._renderBattleBriefing(top, { announceAgain: idChanged });
+  }
+  _buildBriefingState() {
+    const total = this.levelConfig?.sequence?.length ?? 0;
+    return {
+      time: this.time,
+      base: { x: 12.5, z: 22 },
+      enemies: this.enemies
+        .filter((e) => e && e.alive && e !== this.boss)
+        .map((e) => ({ type: e.type, x: e.x, z: e.z, alive: true })),
+      lives: this.lives,
+      boss:
+        this.boss && this.boss.alive
+          ? {
+              hp: this.boss.hp,
+              maxHp: this.boss.maxHp ?? 12,
+              justSpawned: this.time < this._bossJustSpawnedUntil,
+            }
+          : null,
+      activeBuffs: this._serializeBuffs(),
+      remaining: Math.max(0, total - this.kills),
+    };
+  }
+  _serializeBuffs() {
+    // activeBuffs is a Map<string, expiresAt>; convert to plain object for
+    // the briefing module which uses Object.entries.
+    const out = {};
+    if (!this.activeBuffs) return out;
+    if (typeof this.activeBuffs.entries === "function") {
+      for (const [key, expiresAt] of this.activeBuffs.entries())
+        out[key] = expiresAt;
+    } else if (typeof this.activeBuffs === "object") {
+      Object.assign(out, this.activeBuffs);
+    }
+    return out;
+  }
+  _renderBattleBriefing(entry, opts = {}) {
+    const el = this._battleBriefingEl;
+    if (!el) return;
+    // Reuse a single textContent write so the screen reader treats this as
+    // a single update rather than thrashing layout.
+    el.textContent = entry.text;
+    el.dataset.tone = entry.tone;
+    el.classList.remove(
+      "briefing-critical",
+      "briefing-warning",
+      "briefing-info",
+    );
+    el.classList.add(`briefing-${entry.tone}`);
+    if (entry.ariaLive === "assertive" && opts.announceAgain !== false) {
+      el.setAttribute("aria-live", "assertive");
+      this._briefingTone = "assertive";
+      this._lastBriefingAt = this.time;
+      clearTimeout(this._briefingAriaTimer);
+      this._briefingAriaTimer = setTimeout(() => {
+        if (!el) return;
+        el.setAttribute("aria-live", "polite");
+        this._briefingTone = "polite";
+      }, 800);
+    } else if (entry.ariaLive === "polite") {
+      el.setAttribute("aria-live", "polite");
+      this._briefingTone = "polite";
+    }
+  }
+  _clearBattleBriefing() {
+    const el = this._battleBriefingEl;
+    this._currentBriefingId = null;
+    if (!el) return;
+    el.textContent = "";
+    el.dataset.tone = "";
+    el.classList.remove(
+      "briefing-critical",
+      "briefing-warning",
+      "briefing-info",
+    );
+    el.setAttribute("aria-live", "polite");
   }
   flashDamage() {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -920,6 +1039,7 @@ export class GameManager {
       );
       if (tank === this.boss) {
         this.boss = null;
+        this._bossJustSpawnedUntil = -Infinity;
         this.effects.shake(600, 0.18);
       } else if (tank.type === "heavy" || tank.type === "armor") {
         this.effects.shake(200, 0.08);
@@ -1244,6 +1364,7 @@ export class GameManager {
     for (const enemy of this.enemies) if (enemy.alive) enemy.tick(dt);
     this.bullets.tick(dt);
     this._tickBriefing(dt);
+    this.refreshBriefing();
     if (this.state !== "playing") return;
     this.enemies = this.enemies.filter((e) => {
       if (!e.alive) {
@@ -1478,6 +1599,7 @@ export class GameManager {
       effectiveSpeedMul: scaling.speedMul,
       effectiveFireMul: scaling.fireMul,
       threatBadge: badge,
+      briefingState: this._currentBriefingId ?? null,
       briefingTone: this._briefingTone ?? "polite",
       threatRatio: ratio,
       time: this.time,
