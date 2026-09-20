@@ -2043,6 +2043,117 @@ kbd {
   display: none;
 }
 
+/* In-game dynamic briefing HUD (issue-1). Sits inside .mission-intro so it
+   shares the mission-title wrapper. JS swaps tone classes; prefers-reduced-
+   motion strips the flash and uses a plain color swap. */
+.battle-briefing {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border: 1px solid #cbd0c0;
+  background: #ecefe2;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0.4px;
+  border-radius: 2px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-height: 18px;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+.battle-briefing[data-tone="warning"] {
+  border-color: #d8a16a;
+  background: rgba(246, 215, 175, 0.4);
+  color: #8a4a1d;
+}
+.battle-briefing[data-tone="info"] {
+  /* No decoration; default styling carries the entry. */
+}
+.battle-briefing[data-tone="critical"] {
+  border-color: #a24e38;
+  background: rgba(162, 78, 56, 0.22);
+  color: #6f2c1a;
+  font-weight: 600;
+  animation: briefing-flash 220ms ease-out 1;
+}
+.battle-briefing[data-tone="critical"]::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #a24e38;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: briefing-dot 0.6s ease-in-out infinite alternate;
+}
+@keyframes briefing-flash {
+  0% {
+    background-color: rgba(162, 78, 56, 0.55);
+  }
+  100% {
+    background-color: rgba(162, 78, 56, 0.22);
+  }
+}
+@keyframes briefing-dot {
+  to {
+    opacity: 0.35;
+  }
+}
+/* Tone classes — mirrors the [data-tone] selectors above so JS can set
+   either form without losing the visual treatment. */
+.battle-briefing.briefing-warning {
+  border-color: #d8a16a;
+  background: rgba(246, 215, 175, 0.4);
+  color: #8a4a1d;
+}
+.battle-briefing.briefing-info {
+  /* No decoration; default styling carries the entry. */
+}
+.battle-briefing.briefing-critical {
+  border-color: #a24e38;
+  background: rgba(162, 78, 56, 0.22);
+  color: #6f2c1a;
+  font-weight: 600;
+  animation: briefing-flash 220ms ease-out 1;
+}
+.battle-briefing.briefing-critical::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #a24e38;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: briefing-dot 0.6s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-briefing,
+  .battle-briefing[data-tone="critical"],
+  .battle-briefing[data-tone="critical"]::before,
+  .battle-briefing.briefing-critical,
+  .battle-briefing.briefing-critical::before {
+    animation: none;
+    transition: none;
+  }
+  .battle-briefing[data-tone="critical"],
+  .battle-briefing.briefing-critical {
+    background: rgba(162, 78, 56, 0.22);
+  }
+}
+@media (max-width: 600px) {
+  .battle-briefing {
+    font-size: 9px;
+    line-height: 1.6;
+    padding: 7px 8px;
+  }
+}
+
 .difficulty-summary {
   display: block;
   font-family: var(--mono);
