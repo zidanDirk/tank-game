@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run unit and policy tests
+        run: npm test
+
       - name: Build H5 game
         run: npm run build
 
