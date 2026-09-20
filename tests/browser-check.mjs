@@ -26,11 +26,22 @@ try {
     fullPage: true,
   });
   await page.locator("#primary-btn").click();
+  await page.waitForFunction(() => window.__TANK_GAME__.state === "playing");
+  const movementStart = await page.evaluate(
+    () => window.__TANK_GAME__.player.z,
+  );
   await page.keyboard.down("KeyW");
-  await page.waitForTimeout(700);
-  await page.keyboard.up("KeyW");
+  try {
+    await page.waitForFunction(
+      (startZ) => window.__TANK_GAME__.player.z < startZ - 1.5,
+      movementStart,
+      { timeout: 5000 },
+    );
+  } finally {
+    await page.keyboard.up("KeyW");
+  }
   const moved = await page.evaluate(() => window.__TANK_GAME__.player.z);
-  assert.ok(moved < 22);
+  assert.ok(moved < movementStart - 1.5);
   await page.screenshot({ path: "artifacts/motion-1.png" });
   await page.keyboard.down("Space");
   await page.waitForTimeout(400);
