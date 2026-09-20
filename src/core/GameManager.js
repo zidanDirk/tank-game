@@ -111,6 +111,7 @@ export class GameManager {
     this.effects = new Effects(this.scene, () => this.rng());
     this.bullets = new BulletManager(this);
     this.input = new Input(this, this.renderer.domElement);
+    this._initTouchAimLine();
     this.ui = Object.fromEntries(
       [
         "score",
@@ -1347,10 +1348,108 @@ export class GameManager {
     const shake = this.effects.shakeOffset();
     this.camera.position.x = this.cameraBase.x + shake.x;
     this.camera.position.z = this.cameraBase.z + shake.z;
+    this._updateTouchAimLine();
     this.renderer.render(this.scene, this.camera);
     this.camera.position.x = this.cameraBase.x;
     this.camera.position.z = this.cameraBase.z;
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  _initTouchAimLine() {
+    // Persistent single-segment line reused per frame to avoid garbage and
+    // per-frame geometry allocation. Hidden until the player activates a
+    // touch aim pointer.
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(6), 3),
+    );
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xda6b38,
+      transparent: true,
+      opacity: 0.55,
+    });
+    this._touchAimLine = new THREE.Line(geom, mat);
+    this._touchAimLine.frustumCulled = false;
+    this._touchAimLine.visible = false;
+    this._touchAimLine.renderOrder = 5;
+    this.scene.add(this._touchAimLine);
+    this._touchAimCursorEl = document.getElementById("touch-aim-cursor");
+    if (this.input) this._wireTouchAimHaptics();
+  }
+
+  _wireTouchAimHaptics() {
+    if (!this.input) return;
+    this.input.onAimStart = () => {
+      // Short pulse so the player feels the aim lock without distracting from
+      // movement. Skipped entirely under prefers-reduced-motion: reduce so
+      // accessibility users don't get a constant vibrate overlay.
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      )
+        return;
+      this.audio.vibrate("aim-lock");
+    };
+  }
+
+  _updateTouchAimLine() {
+    if (!this._touchAimLine) return;
+    const line = this._touchAimLine;
+    const player = this.player;
+    const target = this.input?.target;
+    const active =
+      this.state === "playing" &&
+      this.input?.activeTouchAim &&
+      player?.alive &&
+      target;
+    if (!active) {
+      if (line.visible) line.visible = false;
+      this._updateTouchAimCursor(false);
+      return;
+    }
+    const dx = target.x - player.x;
+    const dz = target.z - player.z;
+    const len = Math.hypot(dx, dz);
+    const MAX_LEN = 6; // 6 cells = the issue's "射程 6 格" cap
+    let ex = target.x;
+    let ez = target.z;
+    if (len > MAX_LEN) {
+      const k = MAX_LEN / (len || 1);
+      ex = player.x + dx * k;
+      ez = player.z + dz * k;
+    }
+    const arr = line.geometry.attributes.position.array;
+    arr[0] = player.x;
+    arr[1] = 0.42;
+    arr[2] = player.z;
+    arr[3] = ex;
+    arr[4] = 0.42;
+    arr[5] = ez;
+    line.geometry.attributes.position.needsUpdate = true;
+    line.geometry.computeBoundingSphere();
+    line.visible = true;
+    // Track the latest touch position in screen coords for the HUD ring.
+    const lastTouch = [...(this.input?.touchAim?.values() || [])].pop();
+    if (lastTouch) {
+      this._updateTouchAimCursor(true, lastTouch.clientX, lastTouch.clientY);
+    } else {
+      this._updateTouchAimCursor(false);
+    }
+  }
+
+  _updateTouchAimCursor(visible, clientX, clientY) {
+    if (!this._touchAimCursorEl) return;
+    if (!visible || clientX == null) {
+      if (this._touchAimCursorEl.classList.contains("visible"))
+        this._touchAimCursorEl.classList.remove("visible");
+      return;
+    }
+    this._touchAimCursorEl.style.left = `${clientX}px`;
+    this._touchAimCursorEl.style.top = `${clientY}px`;
+    if (!this._touchAimCursorEl.classList.contains("visible"))
+      this._touchAimCursorEl.classList.add("visible");
   }
   snapshot() {
     const tier = difficultyFor(this.difficulty);
@@ -1397,6 +1496,11 @@ export class GameManager {
         alive: this.player.alive,
         aim: this.player.aim,
         level: this.player.level,
+        mouseAim: this.input?.mouseAim ?? false,
+        target: this.input?.target
+          ? { x: this.input.target.x, z: this.input.target.z }
+          : null,
+        activeTouchAim: this.input?.activeTouchAim ?? false,
       },
       enemies: this.enemies.map((e) => ({
         type: e.type,

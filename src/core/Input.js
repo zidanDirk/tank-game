@@ -20,6 +20,11 @@ export class Input {
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.hit = new THREE.Vector3();
     this.touch = new Map();
+    this.touchAim = new Map();
+    this.activeTouchAim = false;
+    this.touchAimDecayed = false;
+    this.touchAimTimer = null;
+    this.onAimStart = null;
     window.addEventListener("keydown", (e) => {
       if (
         e.target instanceof HTMLElement &&
@@ -54,7 +59,30 @@ export class Input {
       }
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (e.pointerType === "touch") return;
+      if (e.pointerType === "touch") {
+        // Touch aim: if pointer captured into touchAim, update target.
+        if (!this.touchAim.has(e.pointerId)) return;
+        const r = canvas.getBoundingClientRect();
+        this.ray.setFromCamera(
+          new THREE.Vector2(
+            ((e.clientX - r.left) / r.width) * 2 - 1,
+            (-(e.clientY - r.top) / r.height) * 2 + 1,
+          ),
+          game.camera,
+        );
+        if (this.ray.ray.intersectPlane(this.plane, this.hit)) {
+          this.target = { x: this.hit.x, z: this.hit.z };
+          this.mouseAim = true;
+        }
+        this.touchAim.set(e.pointerId, {
+          clientX: e.clientX,
+          clientY: e.clientY,
+        });
+        e.preventDefault();
+        return;
+      }
+      // Mouse / pen aim
+      if (this.touchAim.size) return; // touch aim has priority
       const r = canvas.getBoundingClientRect();
       this.ray.setFromCamera(
         new THREE.Vector2(
@@ -70,13 +98,66 @@ export class Input {
     });
     canvas.addEventListener("pointerdown", (e) => {
       game.audio.unlock();
+      if (e.pointerType === "touch") {
+        const r = canvas.getBoundingClientRect();
+        const relX = (e.clientX - r.left) / r.width;
+        const relY = (e.clientY - r.top) / r.height;
+        // right half is the touch aim zone; bottom 25% reserved for fire button
+        if (relX >= 0.5 && relY <= 0.75) {
+          this.touchAim.set(e.pointerId, {
+            clientX: e.clientX,
+            clientY: e.clientY,
+          });
+          this.activeTouchAim = true;
+          this.mouseAim = true;
+          if (this.touchAimTimer) {
+            clearTimeout(this.touchAimTimer);
+            this.touchAimTimer = null;
+          }
+          this.touchAimDecayed = false;
+          try {
+            canvas.setPointerCapture(e.pointerId);
+          } catch (_) {}
+          // compute initial target
+          this.ray.setFromCamera(
+            new THREE.Vector2(
+              ((e.clientX - r.left) / r.width) * 2 - 1,
+              (-(e.clientY - r.top) / r.height) * 2 + 1,
+            ),
+            game.camera,
+          );
+          if (this.ray.ray.intersectPlane(this.plane, this.hit)) {
+            this.target = { x: this.hit.x, z: this.hit.z };
+          }
+          if (this.onAimStart) this.onAimStart();
+          e.preventDefault();
+        }
+        return;
+      }
       if (e.button === 0 && e.pointerType !== "touch") {
         this.firing = true;
         canvas.setPointerCapture(e.pointerId);
       }
     });
-    const release = () => {
+    const release = (e) => {
       this.firing = false;
+      if (e && e.pointerType === "touch" && this.touchAim.has(e.pointerId)) {
+        this.touchAim.delete(e.pointerId);
+        if (this.touchAim.size === 0) {
+          this.activeTouchAim = false;
+          this.mouseAim = false;
+          if (this.touchAimTimer) clearTimeout(this.touchAimTimer);
+          this.touchAimTimer = setTimeout(() => {
+            this.touchAimDecayed = true;
+          }, 600);
+        }
+        if (e.target && typeof e.target.releasePointerCapture === "function") {
+          try {
+            e.target.releasePointerCapture(e.pointerId);
+          } catch (_) {}
+        }
+        e.preventDefault && e.preventDefault();
+      }
     };
     canvas.addEventListener("pointerup", release);
     canvas.addEventListener("pointercancel", release);
@@ -97,6 +178,94 @@ export class Input {
           button.classList.remove("pressed");
         });
     }
+
+    // Touch event fallback for browsers without Pointer Events on touch
+    // (older Safari iOS). Maps changedTouches into the same pointer pipeline.
+    const touchToPointer = (t, type) => ({
+      pointerType: "touch",
+      pointerId: t.identifier,
+      clientX: t.clientX,
+      clientY: t.clientY,
+      target: canvas,
+      preventDefault() {},
+    });
+    canvas.addEventListener(
+      "touchstart",
+      (e) => {
+        for (const t of e.changedTouches) {
+          const pe = touchToPointer(t);
+          const r = canvas.getBoundingClientRect();
+          const relX = (t.clientX - r.left) / r.width;
+          const relY = (t.clientY - r.top) / r.height;
+          if (relX >= 0.5 && relY <= 0.75) {
+            this.touchAim.set(t.identifier, {
+              clientX: t.clientX,
+              clientY: t.clientY,
+            });
+            this.activeTouchAim = true;
+            this.mouseAim = true;
+            if (this.touchAimTimer) {
+              clearTimeout(this.touchAimTimer);
+              this.touchAimTimer = null;
+            }
+            this.touchAimDecayed = false;
+            this.ray.setFromCamera(
+              new THREE.Vector2(
+                ((t.clientX - r.left) / r.width) * 2 - 1,
+                (-(t.clientY - r.top) / r.height) * 2 + 1,
+              ),
+              game.camera,
+            );
+            if (this.ray.ray.intersectPlane(this.plane, this.hit)) {
+              this.target = { x: this.hit.x, z: this.hit.z };
+            }
+            if (this.onAimStart) this.onAimStart();
+          }
+        }
+      },
+      { passive: false },
+    );
+    canvas.addEventListener(
+      "touchmove",
+      (e) => {
+        for (const t of e.changedTouches) {
+          if (!this.touchAim.has(t.identifier)) continue;
+          const r = canvas.getBoundingClientRect();
+          this.touchAim.set(t.identifier, {
+            clientX: t.clientX,
+            clientY: t.clientY,
+          });
+          this.ray.setFromCamera(
+            new THREE.Vector2(
+              ((t.clientX - r.left) / r.width) * 2 - 1,
+              (-(t.clientY - r.top) / r.height) * 2 + 1,
+            ),
+            game.camera,
+          );
+          if (this.ray.ray.intersectPlane(this.plane, this.hit)) {
+            this.target = { x: this.hit.x, z: this.hit.z };
+            this.mouseAim = true;
+          }
+        }
+      },
+      { passive: false },
+    );
+    const endTouchAim = (e) => {
+      for (const t of e.changedTouches) {
+        if (!this.touchAim.has(t.identifier)) continue;
+        this.touchAim.delete(t.identifier);
+        if (this.touchAim.size === 0) {
+          this.activeTouchAim = false;
+          this.mouseAim = false;
+          if (this.touchAimTimer) clearTimeout(this.touchAimTimer);
+          this.touchAimTimer = setTimeout(() => {
+            this.touchAimDecayed = true;
+          }, 600);
+        }
+      }
+    };
+    canvas.addEventListener("touchend", endTouchAim, { passive: false });
+    canvas.addEventListener("touchcancel", endTouchAim, { passive: false });
   }
   applyTouch() {
     for (const key of [...this.keys.keys()])
@@ -106,7 +275,7 @@ export class Input {
       const dir = { up: 0, right: 1, down: 2, left: 3 }[action];
       if (dir !== undefined) {
         this.keys.set("touch" + id, dir);
-        this.mouseAim = false;
+        if (!this.touchAim.size) this.mouseAim = false;
       }
     }
   }
@@ -117,6 +286,13 @@ export class Input {
   clear() {
     this.keys.clear();
     this.touch.clear();
+    this.touchAim.clear();
+    this.activeTouchAim = false;
+    this.touchAimDecayed = true;
+    if (this.touchAimTimer) {
+      clearTimeout(this.touchAimTimer);
+      this.touchAimTimer = null;
+    }
     this.firing = false;
     for (const el of document.querySelectorAll(".pressed"))
       el.classList.remove("pressed");
