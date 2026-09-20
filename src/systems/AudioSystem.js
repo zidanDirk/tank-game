@@ -56,6 +56,7 @@ const VIBRATE = {
   bomb: 220,
   clock: 30,
   shovel: 30,
+  "aim-lock": 8,
 };
 
 export class AudioSystem {

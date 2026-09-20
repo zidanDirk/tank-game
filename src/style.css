@@ -284,6 +284,31 @@ a {
   width: 100%;
   height: 100%;
   outline: none;
+  touch-action: none;
+}
+/* Touch aim cursor: 18px ring that follows the player's right-thumb
+   pointer inside the dynamic aim zone. Hidden from AT and reduced-motion
+   users — the in-canvas aim line carries the same affordance. */
+.touch-aim-cursor {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  border: 2px solid var(--orange, #da6b38);
+  background: rgba(218, 107, 56, 0.18);
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+.touch-aim-cursor.visible {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .touch-aim-cursor {
+    transition: none;
+  }
 }
 .field-coordinate {
   position: absolute;
