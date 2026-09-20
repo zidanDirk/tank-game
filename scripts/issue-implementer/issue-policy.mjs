@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 const LIMITS = Object.freeze({
   bodyCharacters: 50_000,
   acceptanceItems: 5,
-  referencedFiles: 4,
+  referencedFiles: 3,
   concernGroups: 4,
   criteriaPerSlice: 2,
 });
@@ -66,21 +66,54 @@ function detectConcernGroups(text) {
 }
 
 function chunkCriteria(criteria) {
-  const slices = [];
-  for (
-    let index = 0;
-    index < criteria.length;
-    index += LIMITS.criteriaPerSlice
-  ) {
-    slices.push({
-      title: `Issue slice ${slices.length + 1}`,
-      acceptanceCriteria: criteria.slice(
-        index,
-        index + LIMITS.criteriaPerSlice,
-      ),
-    });
+  const groups = [];
+  let current = [];
+
+  const pushCurrent = () => {
+    if (current.length) groups.push(current);
+    current = [];
+  };
+
+  for (const [index, criterion] of criteria.entries()) {
+    const entry = { criterion, sourceCriterionNumber: index + 1 };
+    const criterionFiles = extractReferencedFiles(criterion);
+
+    if (criterionFiles.length > LIMITS.referencedFiles) {
+      pushCurrent();
+      groups.push([entry]);
+      continue;
+    }
+
+    const candidate = [...current, entry];
+    const candidateFiles = extractReferencedFiles(
+      candidate.map(({ criterion: text }) => text).join("\n"),
+    );
+    if (
+      current.length >= LIMITS.criteriaPerSlice ||
+      candidateFiles.length > LIMITS.referencedFiles
+    ) {
+      pushCurrent();
+    }
+    current.push(entry);
   }
-  return slices;
+  pushCurrent();
+
+  return groups.map((group, index) => {
+    const acceptanceCriteria = group.map(({ criterion }) => criterion);
+    const referencedFiles = extractReferencedFiles(
+      acceptanceCriteria.join("\n"),
+    );
+    return {
+      sliceIndex: index + 1,
+      title: `Issue slice ${index + 1}`,
+      acceptanceCriteria,
+      sourceCriterionNumbers: group.map(
+        ({ sourceCriterionNumber }) => sourceCriterionNumber,
+      ),
+      referencedFiles,
+      automatable: referencedFiles.length <= LIMITS.referencedFiles,
+    };
+  });
 }
 
 export function assessIssue(issue) {
@@ -123,6 +156,8 @@ export function assessIssue(issue) {
   }
 
   const classification = reasons.length ? "needs_split" : "eligible";
+  const suggestedSlices =
+    classification === "needs_split" ? chunkCriteria(acceptanceCriteria) : [];
 
   return {
     schemaVersion: 1,
@@ -132,8 +167,10 @@ export function assessIssue(issue) {
     referencedFiles,
     concernGroups,
     reasons,
-    suggestedSlices:
-      classification === "needs_split" ? chunkCriteria(acceptanceCriteria) : [],
+    canAutoSplit:
+      suggestedSlices.length > 0 &&
+      suggestedSlices.every(({ automatable }) => automatable),
+    suggestedSlices,
   };
 }
 

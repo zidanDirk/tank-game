@@ -10,8 +10,10 @@ PROMPT_FILE="$AUTOMATION_DIR/implementation-prompt.md"
 ACCEPTANCE_PROMPT_FILE="$AUTOMATION_DIR/acceptance-prompt.md"
 REVIEW_PROMPT_FILE="$AUTOMATION_DIR/review-prompt.md"
 ISSUE_POLICY_SCRIPT="$AUTOMATION_DIR/issue-policy.mjs"
+SPLIT_PLAN_SCRIPT="$AUTOMATION_DIR/split-issue-plan.mjs"
 REVIEW_POLICY_SCRIPT="$AUTOMATION_DIR/review-policy.mjs"
 VERIFY_SCRIPT_REL="scripts/issue-implementer/verify.sh"
+MODEL_VERIFY_COMMAND="$AUTOMATION_DIR/model-verify.mjs"
 STATE_DIR="${STATE_DIR:-$HOME/.local/state/tank-issue-implementer}"
 WORKTREE_ROOT="$STATE_DIR/worktrees"
 RUN_ROOT="$STATE_DIR/runs"
@@ -25,8 +27,9 @@ TEST_REPAIR_TURNS=30
 REVIEW_TURNS=30
 MAX_TEST_REPAIR_PASSES=1
 MAX_TEST_LOG_CHARS=20000
-MAX_IMPLEMENTATION_FILES=8
-MAX_IMPLEMENTATION_CHANGED_LINES=1200
+MAX_IMPLEMENTATION_FILES=3
+MAX_IMPLEMENTATION_CHANGED_LINES=350
+AUTO_CREATE_SPLIT_ISSUES="${AUTO_CREATE_SPLIT_ISSUES:-true}"
 SAFE_PATH="/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
 mkdir -p "$WORKTREE_ROOT" "$RUN_ROOT" "$RESUME_ROOT"
@@ -88,7 +91,9 @@ for required_file in \
   "$ACCEPTANCE_PROMPT_FILE" \
   "$REVIEW_PROMPT_FILE" \
   "$ISSUE_POLICY_SCRIPT" \
+  "$SPLIT_PLAN_SCRIPT" \
   "$REVIEW_POLICY_SCRIPT" \
+  "$MODEL_VERIFY_COMMAND" \
   "$AUTOMATION_DIR/verify.sh"; do
   if [[ ! -f "$required_file" ]]; then
     log "错误：缺少文件 $required_file"
@@ -238,6 +243,105 @@ save_resume_state() {
       phase: $phase
     }' > "$resume_tmp"
   mv -f -- "$resume_tmp" "$resume_file"
+}
+
+create_split_issues() {
+  local number="$1"
+  local issue_file="$2"
+  local assessment_file="$3"
+  local run_dir="$4"
+  local plan_file="$run_dir/split-plan.json"
+  local existing_issues="$run_dir/existing-issues.json"
+  local parent_comments="$run_dir/parent-comments.json"
+  local result_file="$run_dir/split-result.md"
+  local child_count child_index child_title child_body_file marker existing_url
+  local child_url comment_marker
+
+  if [[ "$AUTO_CREATE_SPLIT_ISSUES" != "true" ]] \
+    || ! jq -e '.canAutoSplit == true' "$assessment_file" >/dev/null; then
+    return 1
+  fi
+
+  if ! node "$SPLIT_PLAN_SCRIPT" \
+    "$issue_file" "$assessment_file" > "$plan_file"; then
+    return 1
+  fi
+
+  if ! gh issue list \
+    --repo "$GH_REPO" \
+    --state all \
+    --limit 1000 \
+    --json number,url,title,body > "$existing_issues"; then
+    return 1
+  fi
+
+  child_count="$(jq '.children | length' "$plan_file")"
+  : > "$run_dir/split-child-urls.txt"
+
+  for (( child_index = 0; child_index < child_count; child_index++ )); do
+    marker="$(jq -r ".children[$child_index].marker" "$plan_file")"
+    child_title="$(jq -r ".children[$child_index].title" "$plan_file")"
+    child_body_file="$run_dir/split-child-$((child_index + 1)).md"
+    jq -r ".children[$child_index].body" "$plan_file" > "$child_body_file"
+
+    existing_url="$(
+      jq -r \
+        --arg marker "<!-- $marker -->" \
+        '[.[] | select((.body // "") | contains($marker))][0].url // empty' \
+        "$existing_issues"
+    )"
+
+    if [[ -n "$existing_url" ]]; then
+      child_url="$existing_url"
+      log "Issue #$number：复用已存在的拆分 Issue：$child_url"
+    elif ! child_url="$(
+      gh issue create \
+        --repo "$GH_REPO" \
+        --title "$child_title" \
+        --body-file "$child_body_file"
+    )"; then
+      log "Issue #$number：创建第 $((child_index + 1)) 个拆分 Issue 失败"
+      return 1
+    else
+      log "Issue #$number：已创建拆分 Issue：$child_url"
+    fi
+
+    printf '%s\n' "$child_url" >> "$run_dir/split-child-urls.txt"
+  done
+
+  comment_marker="issue-implementer-split-result:${number}"
+  {
+    printf '<!-- %s -->\n\n' "$comment_marker"
+    printf '## 自动拆分结果\n\n'
+    printf '父 Issue 超过自动实现预算，已拆分为以下未审批子 Issue：\n\n'
+    sed 's/^/- /' "$run_dir/split-child-urls.txt"
+    printf '\n每个子 Issue 都需要人工确认范围并添加 `同意实现` 标签。\n'
+  } > "$result_file"
+
+  if ! gh issue view "$number" \
+    --repo "$GH_REPO" \
+    --json comments > "$parent_comments"; then
+    return 1
+  fi
+
+  if ! jq -e \
+    --arg marker "<!-- $comment_marker -->" \
+    'any(.comments[]?; (.body // "") | contains($marker))' \
+    "$parent_comments" >/dev/null; then
+    if ! gh issue comment "$number" \
+      --repo "$GH_REPO" \
+      --body-file "$result_file" >/dev/null; then
+      return 1
+    fi
+  fi
+
+  if ! gh issue edit "$number" \
+    --repo "$GH_REPO" \
+    --remove-label "同意实现" >/dev/null; then
+    return 1
+  fi
+
+  return 0
 }
 
 validate_worktree_changes() {
@@ -436,17 +540,28 @@ process_issue() {
   if [[ "$(jq -r '.classification' "$assessment_file")" != "eligible" ]]; then
     {
       printf '# Issue #%s 需要拆分\n\n' "$number"
-      printf '自动实现已停止；以下内容仅供人工审批，不会自动创建子 Issue。\n\n'
+      printf '自动实现已停止；以下内容用于创建需要重新审批的子 Issue。\n\n'
       jq -r '
         .reasons[] | "- 范围原因：\(.code)（实际 \(.actual)，限制 \(.limit)）"
       ' "$assessment_file"
       jq -r '
         .suggestedSlices[] |
         "\n## \(.title)\n" +
-        (.acceptanceCriteria | map("- [ ] " + .) | join("\n"))
+        (.acceptanceCriteria | map("- [ ] " + .) | join("\n")) +
+        "\n\n预计文件：" +
+        (if (.referencedFiles | length) == 0 then "未明确" else (.referencedFiles | join(", ")) end) +
+        "\n可自动拆分：" + (.automatable | tostring)
       ' "$assessment_file"
     } > "$run_dir/split-proposal.md"
     log "Issue #$number：范围过大或验收标准不完整；已生成 $run_dir/split-proposal.md"
+
+    if create_split_issues \
+      "$number" "$issue_file" "$assessment_file" "$run_dir"; then
+      log "Issue #$number：已完成幂等拆分；子 Issue 等待人工审批"
+      return 0
+    fi
+
+    log "Issue #$number：无法安全自动拆分，请人工处理 split-proposal.md"
     return 1
   fi
 
@@ -521,7 +636,10 @@ process_issue() {
     printf '此 PR 由 Claude Code 使用 MiniMax M3 根据已审批 Issue 自动实现。\n\n'
     printf -- '- 来源：%s\n' "$url"
     printf -- '- 验证：固定单元、构建和真实浏览器检查；独立只读验收审查\n'
-    printf -- '- 合并策略：必须由人类审查并手动合并\n\n'
+    printf -- '- 合并策略：必须由人类在最新提交上试玩，并添加 `人工试玩通过` 标签后手动合并\n\n'
+    printf -- '- [ ] 已在桌面端试玩主要流程\n'
+    printf -- '- [ ] 已在移动端尺寸试玩触控流程\n'
+    printf -- '- [ ] 已确认控制台无新增错误\n\n'
     printf 'Closes #%s\n' "$number"
   } > "$pr_body"
 
@@ -615,6 +733,7 @@ process_issue() {
           -u GITHUB_TOKEN \
           -u GH_REPO \
           claude --bare \
+          --restricted \
           --settings "$SETTINGS_FILE" \
           --model sonnet \
           --permission-mode dontAsk \
@@ -680,6 +799,9 @@ process_issue() {
   cp "$PROMPT_FILE" "$issue_prompt"
 
   {
+    printf '\nExact verification commands supplied by the harness:\n'
+    printf -- '- `%s unit`\n' "$MODEL_VERIFY_COMMAND"
+    printf -- '- `%s build`\n' "$MODEL_VERIFY_COMMAND"
     printf '\nImmutable acceptance test: `%s`\n' "$acceptance_test"
     printf '\n<acceptance_contract_json>\n'
     jq '{acceptanceCriteria}' "$assessment_file"
@@ -725,11 +847,12 @@ process_issue() {
         -u GITHUB_TOKEN \
         -u GH_REPO \
         claude --bare \
+        --restricted \
         --settings "$SETTINGS_FILE" \
         --model sonnet \
         --permission-mode dontAsk \
-        --allowedTools "Read,Glob,Grep,Edit,Write" \
-        --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Task" \
+        --allowedTools "Read,Glob,Grep,Edit,Write,Bash($MODEL_VERIFY_COMMAND unit),Bash($MODEL_VERIFY_COMMAND build)" \
+        --disallowedTools "WebFetch,WebSearch,NotebookEdit,Task" \
         --max-turns "$max_turns" \
         --output-format json \
         -p "$(<"$pass_prompt")"
@@ -817,7 +940,8 @@ process_issue() {
       printf '请只根据日志和当前代码定位失败原因，在原 Issue 范围内做最小修复。'
       printf '不得修改 `%s`；若其他测试本身错误，只能做与 Issue 直接相关的最小修正。' "$acceptance_test"
       printf '实现错误时修正实现。'
-      printf '不要运行命令，不要扩大范围，完成编辑后立即总结并停止。\n\n'
+      printf '只可运行 `%s unit` 或 `%s build`；不要运行任何其他命令。' "$MODEL_VERIFY_COMMAND" "$MODEL_VERIFY_COMMAND"
+      printf '不要扩大范围，完成编辑后立即总结并停止。\n\n'
       printf '<untrusted_test_log_json>\n'
       jq -Rs '{test_log: .}' "$test_tail_file"
       printf '</untrusted_test_log_json>\n'
@@ -833,11 +957,12 @@ process_issue() {
         -u GITHUB_TOKEN \
         -u GH_REPO \
         claude --bare \
+        --restricted \
         --settings "$SETTINGS_FILE" \
         --model sonnet \
         --permission-mode dontAsk \
-        --allowedTools "Read,Glob,Grep,Edit,Write" \
-        --disallowedTools "Bash,WebFetch,WebSearch,NotebookEdit,Task" \
+        --allowedTools "Read,Glob,Grep,Edit,Write,Bash($MODEL_VERIFY_COMMAND unit),Bash($MODEL_VERIFY_COMMAND build)" \
+        --disallowedTools "WebFetch,WebSearch,NotebookEdit,Task" \
         --max-turns "$TEST_REPAIR_TURNS" \
         --output-format json \
         -p "$(<"$repair_prompt")"
@@ -946,6 +1071,7 @@ process_issue() {
       -u GITHUB_TOKEN \
       -u GH_REPO \
       claude --bare \
+      --restricted \
       --settings "$SETTINGS_FILE" \
       --model sonnet \
       --permission-mode dontAsk \

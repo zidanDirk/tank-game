@@ -44,10 +44,17 @@ test("a cross-cutting issue is rejected with bounded split suggestions", () => {
     ),
   );
   assert.ok(result.reasons.some((reason) => reason.code === "too_many_files"));
+  assert.equal(result.canAutoSplit, true);
   assert.equal(result.suggestedSlices.length, 4);
+  assert.deepEqual(
+    result.suggestedSlices.map((slice) => slice.sliceIndex),
+    [1, 2, 3, 4],
+  );
   assert.ok(
     result.suggestedSlices.every(
-      (slice) => slice.acceptanceCriteria.length <= 2,
+      (slice) =>
+        slice.acceptanceCriteria.length <= 2 &&
+        slice.referencedFiles.length <= 3,
     ),
   );
 });
@@ -76,6 +83,22 @@ test("malformed issue input is rejected", () => {
   );
 });
 
+test("an indivisible criterion that names four files requires manual splitting", () => {
+  const result = assessIssue({
+    number: 46,
+    title: "One indivisible cross-cutting behavior",
+    body: `
+## 验收标准
+- [ ] Keep index.html, src/style.css, src/core/Input.js and src/core/GameManager.js synchronized.
+`,
+  });
+
+  assert.equal(result.classification, "needs_split");
+  assert.equal(result.canAutoSplit, false);
+  assert.equal(result.suggestedSlices.length, 1);
+  assert.equal(result.suggestedSlices[0].automatable, false);
+});
+
 test("an issue without machine-readable acceptance criteria needs refinement", () => {
   const result = assessIssue({
     number: 44,
@@ -87,6 +110,30 @@ test("an issue without machine-readable acceptance criteria needs refinement", (
   assert.ok(
     result.reasons.some(
       (reason) => reason.code === "missing_acceptance_criteria",
+    ),
+  );
+});
+
+test("four explicitly named files exceed the automatic implementation budget", () => {
+  const result = assessIssue({
+    number: 45,
+    title: "Small cross-file cleanup",
+    body: `
+## 验收标准
+- [ ] Update src/core/Input.js.
+- [ ] Update src/core/GameManager.js.
+- [ ] Update src/style.css.
+- [ ] Update index.html.
+`,
+  });
+
+  assert.equal(result.classification, "needs_split");
+  assert.ok(
+    result.reasons.some(
+      (reason) =>
+        reason.code === "too_many_files" &&
+        reason.actual === 4 &&
+        reason.limit === 3,
     ),
   );
 });
