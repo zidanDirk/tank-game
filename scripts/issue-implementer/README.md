@@ -11,7 +11,7 @@ This automation turns a small, human-approved GitHub Issue into a pull request. 
 ## Gates
 
 1. A deterministic policy classifies the Issue before any model call. Oversized Issues are idempotently split into linked child Issues; the parent approval label is removed and each child waits for a fresh human approval.
-2. A separate model pass writes one acceptance test. It must fail before implementation and is committed before the implementation pass.
+2. A separate model pass writes one acceptance test. It must fail before implementation and is committed before the implementation pass. If the first 30-turn pass reaches its bound without changing any file, the same session receives one tightly scoped 20-turn continuation. Missing output and out-of-scope edits are reported as separate failures; any out-of-scope edit disables continuation.
 3. The implementation model cannot use general Bash, the network, GitHub credentials, dependency manifests, automation files, or the immutable acceptance test. Its only executable tool selects the fixed `unit` or `build` verifier with a credential-free environment and timeout.
 4. Unit tests, a production build, and the three browser scenarios run through `verify.sh`.
 5. A final read-only model pass must account for every acceptance criterion using a validated JSON protocol.
