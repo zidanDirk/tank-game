@@ -378,6 +378,124 @@ export const MODIFIERS = [
   { id: "siege", label: "围攻", hint: "刷新 +20%" },
 ];
 
+// Player-selectable difficulty presets. Each tier maps a friendly name + a
+// short copy blurb onto six independent axes so the difficulty signal isn't a
+// single global knob (XAG 108). Multipliers combine multiplicatively with
+// existing run upgrades, modifiers, and per-level / per-wave tuning.
+export const DIFFICULTY_TIERS = [
+  {
+    id: "cadet",
+    label: "实习兵",
+    english: "CADET",
+    summary: "速 ×0.75 · 射 ×1.25 · 生命 ×1.5",
+    description: "敌人更慢、射速更慢、道具更慷慨，适合新指挥官。",
+    enemySpeedMul: 0.75,
+    enemyFireMul: 1.25,
+    spawnIntervalMul: 1.35,
+    livesMul: 1.5,
+    powerupDropMul: 1.35,
+    hazardMul: 0.85,
+  },
+  {
+    id: "veteran",
+    label: "老兵",
+    english: "VETERAN",
+    summary: "速 ×1.00 · 射 ×1.00 · 生命 ×1.0",
+    description: "现行难度基线，复刻 Battle City 经典手感。",
+    enemySpeedMul: 1.0,
+    enemyFireMul: 1.0,
+    spawnIntervalMul: 1.0,
+    livesMul: 1.0,
+    powerupDropMul: 1.0,
+    hazardMul: 1.0,
+  },
+  {
+    id: "iron-hand",
+    label: "铁拳",
+    english: "IRON HAND",
+    summary: "速 ×1.20 · 射 ×0.85 · 生命 ×0.85",
+    description: "敌人更快、射速更快，道具掉率不变 — 节奏更紧。",
+    enemySpeedMul: 1.2,
+    enemyFireMul: 0.85,
+    spawnIntervalMul: 0.9,
+    livesMul: 0.85,
+    powerupDropMul: 1.0,
+    hazardMul: 1.15,
+  },
+  {
+    id: "iron-curtain",
+    label: "铁幕",
+    english: "IRON CURTAIN",
+    summary: "速 ×1.40 · 射 ×0.70 · 生命 ×0.65",
+    description: "挑战极限：全速压制 + 更少生命，资深指挥官专属。",
+    enemySpeedMul: 1.4,
+    enemyFireMul: 0.7,
+    spawnIntervalMul: 0.8,
+    livesMul: 0.65,
+    powerupDropMul: 0.85,
+    hazardMul: 1.3,
+  },
+];
+export const DEFAULT_DIFFICULTY = "veteran";
+export const DIFFICULTY_KEYS = DIFFICULTY_TIERS.map((t) => t.id);
+const _DIFFICULTY_BY_ID = Object.fromEntries(
+  DIFFICULTY_TIERS.map((t) => [t.id, t]),
+);
+// Surface the default tier for any unknown id so callers that resolve a tier
+// by an externally-supplied key (e.g. persistence, URL, legacy save) keep
+// working without a separate null check.
+export const DIFFICULTY_BY_ID = new Proxy(_DIFFICULTY_BY_ID, {
+  get(target, prop, receiver) {
+    if (typeof prop === "string" && !(prop in target)) {
+      return Reflect.get(target, DEFAULT_DIFFICULTY, receiver);
+    }
+    return Reflect.get(target, prop, receiver);
+  },
+});
+
+function clampDifficulty(id) {
+  if (DIFFICULTY_BY_ID[id]) return id;
+  return DEFAULT_DIFFICULTY;
+}
+
+export function difficultyFor(id) {
+  return DIFFICULTY_BY_ID[clampDifficulty(id)];
+}
+
+// Pure scaling helper — combines a difficulty tier with the per-wave tuning
+// curve so it can be tested without instantiating GameManager. Returning the
+// raw multiplier keeps the helper composable with future per-axis overrides.
+export function computeEffectiveScaling(difficulty, wave = 1, base = ENDLESS) {
+  const tier = difficultyFor(difficulty);
+  const w = Math.max(1, Math.floor(wave));
+  const fireMul =
+    (base.fireMultiplierBase /
+      (1 + base.fireMultiplierDecay * (w - 1))) * tier.enemyFireMul;
+  const speedMul = (1 + base.speedGrowth * (w - 1)) * tier.enemySpeedMul;
+  const spawnInterval = Math.max(
+    base.spawnIntervalMin,
+    base.spawnIntervalBase - (w - 1) * 0.18,
+  ) * tier.spawnIntervalMul;
+  const lives = Math.max(
+    1,
+    Math.round(
+      (base.livesStart + Math.floor((w - 1) / 3)) * tier.livesMul,
+    ),
+  );
+  const dropChance = Math.min(
+    0.75,
+    base.powerupDropChance * tier.powerupDropMul,
+  );
+  return {
+    fireMul,
+    speedMul,
+    spawnInterval,
+    lives,
+    dropChance,
+    tier,
+  };
+}
+
 export function dailySeed(now = new Date()) {
   const y = now.getFullYear();
   const m = now.getMonth() + 1;

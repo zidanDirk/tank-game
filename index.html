@@ -101,6 +101,15 @@
                   <div id="boss-hp-fill" class="boss-hp-fill"></div>
                 </div>
               </div>
+              <div
+                id="threat-badge"
+                class="threat-badge"
+                aria-label="当前威胁等级"
+                hidden
+              >
+                <span id="threat-badge-label">VETERAN</span>
+                <b id="threat-badge-mult">×1.00</b>
+              </div>
               <div id="buff-tray" class="buff-tray" aria-label="当前道具"></div>
               <div
                 id="run-upgrade-tray"
@@ -114,6 +123,18 @@
               ></div>
               <div class="damage-vignette" aria-hidden="true"></div>
               <div class="score-popup-layer" aria-hidden="true"></div>
+              <div
+                id="threat-banner"
+                class="threat-banner"
+                aria-hidden="true"
+              ></div>
+              <div
+                id="briefing-aria"
+                class="briefing-aria"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              ></div>
               <div id="overlay" class="game-overlay" hidden>
                 <div id="overlay-panel" class="overlay-panel">
                   <span class="overlay-kicker"
@@ -147,6 +168,12 @@
                       <small>程序化 · Boss · 排行</small>
                     </button>
                   </div>
+                  <div
+                    id="difficulty-tier"
+                    class="difficulty-tier"
+                    role="radiogroup"
+                    aria-label="选择难度预设"
+                  ></div>
                   <h1 id="overlay-title">指挥官，准备出击</h1>
                   <p id="overlay-copy">
                     守护基地，击退敌军。最后一道防线，交给你了。
