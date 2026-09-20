@@ -1,0 +1,107 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: ["master"]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Unit, build, and browser acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run fixed verification matrix
+        run: scripts/issue-implementer/verify.sh full
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ github.run_id }}
+          path: |
+            artifacts/**/*.json
+            artifacts/**/*.png
+            artifacts/verify/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  reset-stale-playtest:
+    name: Reset stale playtest approval
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'synchronize' &&
+      contains(github.event.pull_request.labels.*.name, '人工试玩通过')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Remove approval after new commits
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: "人工试玩通过",
+            });
+
+  human-playtest:
+    name: Human playtest approval
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.quality-gate.result == 'success'
+    needs: [quality-gate, reset-stale-playtest]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: read
+
+    steps:
+      - name: Require approval for the current head commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const approved = issue.labels.some((label) =>
+              (typeof label === "string" ? label : label.name) === "人工试玩通过"
+            );
+            if (!approved) {
+              core.setFailed(
+                "请在最新提交上完成人工试玩，然后添加“人工试玩通过”标签。"
+              );
+            }

@@ -1,17 +1,8 @@
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
+import { browserLaunchOptions } from "./browser-launch.mjs";
 
-const browser = await chromium.launch({
-  executablePath:
-    process.env.CHROME_PATH ||
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  headless: true,
-  args: [
-    "--use-gl=angle",
-    "--use-angle=swiftshader",
-    "--enable-unsafe-swiftshader",
-  ],
-});
+const browser = await chromium.launch(browserLaunchOptions());
 
 const page = await browser.newPage({
   viewport: { width: 1280, height: 900 },
@@ -116,7 +107,9 @@ try {
 
   const selectedCampaignId = ids[0];
   const campaignCenter = await page.evaluate((id) => {
-    const button = document.querySelector(`.upgrade-choice[data-upgrade="${id}"]`);
+    const button = document.querySelector(
+      `.upgrade-choice[data-upgrade="${id}"]`,
+    );
     const rect = button.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   }, selectedCampaignId);
@@ -138,7 +131,9 @@ try {
   assert.equal(snapshot.upgradeChoices.length, 3);
   const endlessId = snapshot.upgradeChoices[0];
   const endlessCenter = await page.evaluate((id) => {
-    const button = document.querySelector(`.upgrade-choice[data-upgrade="${id}"]`);
+    const button = document.querySelector(
+      `.upgrade-choice[data-upgrade="${id}"]`,
+    );
     const rect = button.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   }, endlessId);

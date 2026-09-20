@@ -1,17 +1,9 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
 import assert from "node:assert/strict";
-const browser = await chromium.launch({
-  executablePath:
-    process.env.CHROME_PATH ||
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  headless: true,
-  args: [
-    "--use-gl=angle",
-    "--use-angle=swiftshader",
-    "--enable-unsafe-swiftshader",
-  ],
-});
+import { browserLaunchOptions } from "./browser-launch.mjs";
+
+const browser = await chromium.launch(browserLaunchOptions());
 const page = await browser.newPage({
   viewport: { width: 1440, height: 1100 },
   deviceScaleFactor: 1,
@@ -34,11 +26,22 @@ try {
     fullPage: true,
   });
   await page.locator("#primary-btn").click();
+  await page.waitForFunction(() => window.__TANK_GAME__.state === "playing");
+  const movementStart = await page.evaluate(
+    () => window.__TANK_GAME__.player.z,
+  );
   await page.keyboard.down("KeyW");
-  await page.waitForTimeout(700);
-  await page.keyboard.up("KeyW");
+  try {
+    await page.waitForFunction(
+      (startZ) => window.__TANK_GAME__.player.z < startZ - 1.5,
+      movementStart,
+      { timeout: 5000 },
+    );
+  } finally {
+    await page.keyboard.up("KeyW");
+  }
   const moved = await page.evaluate(() => window.__TANK_GAME__.player.z);
-  assert.ok(moved < 22);
+  assert.ok(moved < movementStart - 1.5);
   await page.screenshot({ path: "artifacts/motion-1.png" });
   await page.keyboard.down("Space");
   await page.waitForTimeout(400);
@@ -93,8 +96,15 @@ try {
   // Base failure is driven entirely by cardinal movement and shooting after restart.
   await page.locator("#restart-btn").click();
   await page.keyboard.down("KeyD");
-  await page.waitForTimeout(100);
-  await page.keyboard.up("KeyD");
+  try {
+    await page.waitForFunction(
+      () => Math.abs(window.__TANK_GAME__.player.aim - Math.PI / 2) < 0.01,
+      {},
+      { timeout: 5000 },
+    );
+  } finally {
+    await page.keyboard.up("KeyD");
+  }
   await page.keyboard.down("Space");
   await page.waitForFunction(
     () => window.__TANK_GAME__.state === "lost",
