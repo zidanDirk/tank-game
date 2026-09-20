@@ -96,8 +96,15 @@ try {
   // Base failure is driven entirely by cardinal movement and shooting after restart.
   await page.locator("#restart-btn").click();
   await page.keyboard.down("KeyD");
-  await page.waitForTimeout(100);
-  await page.keyboard.up("KeyD");
+  try {
+    await page.waitForFunction(
+      () => Math.abs(window.__TANK_GAME__.player.aim - Math.PI / 2) < 0.01,
+      {},
+      { timeout: 5000 },
+    );
+  } finally {
+    await page.keyboard.up("KeyD");
+  }
   await page.keyboard.down("Space");
   await page.waitForFunction(
     () => window.__TANK_GAME__.state === "lost",
