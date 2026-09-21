@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
+import { readContract } from "../daily-research/contract.mjs";
 
 const LIMITS = Object.freeze({
   bodyCharacters: 50_000,
@@ -118,6 +119,16 @@ function chunkCriteria(criteria) {
 
 export function assessIssue(issue) {
   assertIssue(issue);
+
+  const contract = readContract(issue.body);
+  if (contract) {
+    return {
+      schemaVersion: 2, issueNumber: issue.number, classification: "eligible",
+      acceptanceCriteria: contract.acceptance, referencedFiles: contract.changeFiles,
+      acceptanceKind: contract.acceptanceKind, dependencyIssues: contract.dependencyIssues,
+      concernGroups: [], reasons: [], canAutoSplit: false, suggestedSlices: [],
+    };
+  }
 
   const acceptanceCriteria = extractAcceptanceCriteria(issue.body);
   const referencedFiles = extractReferencedFiles(

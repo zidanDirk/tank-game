@@ -2,6 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { classifyAcceptanceChanges } from "../scripts/issue-implementer/acceptance-policy.mjs";
 
+test("browser acceptance permits only the exact browser script", () => {
+  assert.equal(classifyAcceptanceChanges(9, ["tests/acceptance-issue-9.browser.mjs"], "browser").status, "exact");
+  assert.equal(classifyAcceptanceChanges(9, ["tests/acceptance-issue-9.test.js"], "browser").status, "extra");
+  assert.throws(() => classifyAcceptanceChanges(9, [], "manual"), /invalid acceptance kind/);
+});
+
 test("missing acceptance output is classified separately and may be retried", () => {
   const result = classifyAcceptanceChanges(9, []);
 
