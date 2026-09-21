@@ -1,0 +1,193 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { readPages } from "./github-pages.mjs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { validatePlan, renderTask, readContract, approved, APPROVAL_LABELS } from "./contract.mjs";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoDir = process.env.REPO_DIR || path.resolve(here, "../..");
+const repo = process.env.GH_REPO || "zidanDirk/tank-game";
+const state = process.env.TANK_RESEARCH_STATE_DIR || path.join(os.homedir(), ".local/state/tank-research-v2");
+fs.mkdirSync(state, { recursive: true, mode: 0o700 });
+const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const mode = process.argv[2] || "research";
+const runDir = fs.mkdtempSync(path.join(state, `${day}-${mode}-`));
+const write = (name, value) => fs.writeFileSync(path.join(runDir, name), typeof value === "string" ? value : JSON.stringify(value, null, 2), { mode: 0o600 });
+
+function exec(command, args, options = {}) {
+  const result = spawnSync(command, args, { cwd: repoDir, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 120_000, ...options });
+  if (result.error || result.status !== 0) throw new Error(`${command} failed: ${(result.stderr || result.error?.message || "").slice(-3000)}`);
+  return result.stdout;
+}
+function gh(args) { return exec("gh", args); }
+function issue(n) { return JSON.parse(gh(["issue", "view", String(n), "--repo", repo, "--json", "number,title,body,url,labels,state"])); }
+function listIssues() { return readPages((args) => JSON.parse(gh(args)), `repos/${repo}/issues?state=all`).filter((i) => !i.pull_request); }
+
+function decodeResult(response) {
+  if (response.is_error) throw new Error("cannot resume a failed model response");
+  if (response.structured_output) return response.structured_output;
+  return JSON.parse(String(response.result || "").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
+}
+
+let latestModelSession = null;
+function model(name, settings, prompt, cwd, search = false, turns = 40, resume = null) {
+  const env = { ...process.env };
+  for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_REPO"]) delete env[key];
+  const args = ["--bare", "--settings", settings, "--model", "sonnet", "--permission-mode", "dontAsk",
+    "--allowedTools", search ? "Read,Glob,Grep,mcp__MiniMax__web_search" : "Read,Glob,Grep",
+    "--disallowedTools", "Bash,Edit,Write,WebFetch,WebSearch,NotebookEdit,Task",
+    "--max-turns", String(turns), "--output-format", "json", "-p", prompt];
+  if (resume) {
+    if (!/^[0-9a-f-]{36}$/i.test(resume)) throw new Error("invalid resume session");
+    args[args.indexOf("--allowedTools") + 1] = "";
+    args.push("--resume", resume, "--tools", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}');
+  } else if (search) args.push("--strict-mcp-config", "--mcp-config", process.env.RESEARCH_MCP_CONFIG || path.join(os.homedir(), ".claude.json"));
+  else args.push("--restricted");
+  write(`${name}-prompt.md`, prompt);
+  const result = spawnSync("claude", args, { cwd, env, encoding: "utf8", timeout: 1800_000, maxBuffer: 16 * 1024 * 1024 });
+  write(`${name}-response.json`, result.stdout || "");
+  write(`${name}-stderr.log`, result.stderr || result.error?.message || "");
+  const response = JSON.parse(result.stdout || "{}");
+  latestModelSession = response.session_id || resume;
+  if (!resume && response.subtype === "error_max_turns" && response.session_id) {
+    return model(`${name}-finalize`, settings,
+      "Do not call tools. Use the context already gathered in this session. Finish by returning only the requested JSON object, retaining scope and acceptance requirements.\n" + prompt,
+      cwd, false, 12, response.session_id);
+  }
+  if (result.status !== 0 || response.is_error) throw new Error(`${name} model failed (${response.subtype || result.status}); evidence: ${runDir}`);
+  return decodeResult(response);
+}
+
+function planner(input, cwd, sourceCount = 0, seed = null) {
+  let feedback = "";
+  let previousDraft = null;
+  let session = seed?.session_id || null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const plan = attempt === 1 && seed && !seed.is_error ? decodeResult(seed) :
+        model(`plan-${attempt}`, process.env.SETTINGS_FILE || path.join(os.homedir(), ".claude/settings-minimax.json"),
+          fs.readFileSync(path.join(here, "plan-prompt.md"), "utf8") + "\n<untrusted_input_json>\n" + JSON.stringify({ ...input, previousDraft }) + "\n</untrusted_input_json>\nValidation feedback: " + feedback +
+          (session ? "\nDo not call tools. Correct the existing plan from session context. Split oversized tasks; preserve all requirements and check acceptance statements for internal contradictions." : ""),
+          cwd, false, session ? 12 : 40, session);
+      previousDraft = plan;
+      if (!(attempt === 1 && seed && !seed.is_error)) session = latestModelSession;
+      validatePlan(plan, sourceCount);
+      write("plan.json", plan);
+      return plan;
+    } catch (error) {
+      feedback = error.message;
+      write(`plan-${attempt}-validation.log`, feedback);
+      // Provider failures need retry/backoff, not three immediate paid retries.
+      if (feedback.includes("model failed")) throw error;
+    }
+  }
+  throw new Error(`planning failed after three attempts: ${feedback}; evidence: ${runDir}`);
+}
+
+function publish(plan, batch, sources, existing, parent) {
+  if (parent) {
+    const current = issue(parent.number);
+    if (current.state !== "OPEN" || !approved(current.labels) || current.body !== parent.body) {
+      throw new Error("parent is no longer approved/open or changed during planning; not publishing");
+    }
+  }
+  for (const label of APPROVAL_LABELS) gh(["label", "create", label, "--repo", repo, "--color", "0E8A16", "--force"]);
+  const numbers = new Map();
+  for (const task of plan.tasks) {
+    const marker = `tank-plan-v2:${batch}:${task.id}`;
+    const found = existing.find((i) => i.body?.includes(`<!-- ${marker} -->`));
+    if (found) {
+      numbers.set(task.id, found.number);
+      console.log(`复用 #${found.number}: ${task.title}`);
+      continue;
+    }
+    const body = renderTask(task, marker, task.dependsOn.map((id) => numbers.get(id)), sources) +
+      `\n研究建议：${plan.title}\n${parent ? `父 Issue：#${parent.number}` : `<!-- tank-research:${day} -->`}\n`;
+    const bodyFile = path.join(runDir, `${task.id}.md`);
+    fs.writeFileSync(bodyFile, body);
+    const url = gh(["issue", "create", "--repo", repo, "--title", task.title, "--body-file", bodyFile, "--label", "未审批"]).trim();
+    numbers.set(task.id, Number(url.split("/").at(-1)));
+    console.log(url);
+  }
+  if (parent) gh(["issue", "edit", String(parent.number), "--repo", repo, "--remove-label", "同意实现", "--add-label", "挂起"]);
+  return Object.fromEntries(numbers);
+}
+
+try {
+  if (mode === "check-deps") {
+    const current = issue(Number(process.argv[3]));
+    if (!approved(current.labels) || current.state !== "OPEN") throw new Error("approval labels conflict or issue is not approved/open");
+    const task = readContract(current.body);
+    for (const n of task?.dependencyIssues || []) {
+      const prs = JSON.parse(gh(["pr", "list", "--repo", repo, "--state", "merged", "--head", `claude/issue-${n}`, "--json", "number"]));
+      if (!prs.length) throw new Error(`dependency #${n} has no merged implementation PR`);
+    }
+    if (process.argv[4]) write("approved-contract.json", task);
+    process.exit(0);
+  }
+  if (!["research", "split"].includes(mode)) throw new Error("usage: run.mjs research|split ISSUE_NUMBER|check-deps ISSUE_NUMBER");
+  const existing = listIssues();
+  const parent = mode === "split" ? issue(Number(process.argv[3])) : null;
+  if (parent && process.env.DRY_RUN !== "true" && (parent.state !== "OPEN" || !approved(parent.labels))) {
+    throw new Error("only an open approved parent may publish split issues");
+  }
+  const batch = parent ? `issue-${parent.number}` : day;
+  const checkpoint = path.join(state, `plan-${batch}.json`);
+  if (process.env.DRY_RUN !== "true" && !parent && existing.some((i) => i.body?.includes(`<!-- tank-research:${day} -->`)) && !fs.existsSync(checkpoint)) {
+    console.log("今天已有研究 Issue；跳过重复研究");
+    process.exit(0);
+  }
+  let saved;
+  if (fs.existsSync(checkpoint)) {
+    saved = JSON.parse(fs.readFileSync(checkpoint));
+    if (parent && saved.parentBody !== parent.body) throw new Error("parent changed after planning; archive the checkpoint and plan again");
+    validatePlan(saved.plan, saved.sourceCount);
+  } else {
+    exec("git", ["fetch", "origin", "master"]);
+    const checkout = path.join(runDir, "repo");
+    exec("git", ["worktree", "add", "--detach", checkout, "origin/master"]);
+    const themes = ["年轻化视觉与表达", "可玩性与即时反馈", "3D 场景与光照", "关卡与重玩性", "UI 交互", "移动端操作", "无障碍与性能"];
+    const theme = themes[new Date(`${day}T12:00:00+08:00`).getUTCDay()];
+    let research = parent;
+    if (!parent) {
+      const researchCache = path.join(state, `research-${day}.json`);
+      if (process.env.RESEARCH_RESPONSE_FILE) {
+        research = decodeResult(JSON.parse(fs.readFileSync(process.env.RESEARCH_RESPONSE_FILE, "utf8")));
+      } else if (fs.existsSync(researchCache)) {
+        research = JSON.parse(fs.readFileSync(researchCache, "utf8"));
+      } else research = model("research", process.env.RESEARCH_SETTINGS_FILE || path.join(os.homedir(), ".claude/settings.json"),
+        fs.readFileSync(path.join(here, "research-prompt.md"), "utf8") + "\n<untrusted_context_json>\n" + JSON.stringify({ day, theme, recentIssues: existing.slice(0, 100).map(({ number, title, body }) => ({ number, title, body: body?.slice(0, 2000) })) }) + "\n</untrusted_context_json>", checkout, true, 30);
+      if (!Array.isArray(research.sources) || research.sources.length < 2 || research.sources.length > 5 || research.sources.some((s) => {
+        try {
+          const url = new URL(s.url);
+          return !["https:", "http:"].includes(url.protocol) || !!url.username || !!url.password || typeof s.finding !== "string" || !s.finding.trim();
+        } catch { return true; }
+      })) throw new Error("research must provide 2–5 HTTP(S) sources with findings");
+      fs.writeFileSync(`${researchCache}.tmp`, JSON.stringify(research), { mode: 0o600 });
+      fs.renameSync(`${researchCache}.tmp`, researchCache);
+    }
+    const criteria = parent ? [...parent.body.matchAll(/^\s*[-*]\s*\[[ xX]\]\s+(.+)$/gm)].map((m) => m[1]) : [];
+    if (parent && !criteria.length) throw new Error("parent has no acceptance criteria; needs human clarification");
+    const plannerInput = { research, sourceCriteria: criteria.map((value, i) => ({ number: i + 1, value })) };
+    let plan;
+    if (process.env.PLAN_RESPONSE_FILE) {
+      const previous = JSON.parse(fs.readFileSync(process.env.PLAN_RESPONSE_FILE, "utf8"));
+      if (previous.is_error && previous.subtype !== "error_max_turns") throw new Error("cannot resume this failed plan response");
+      const previousCheckout = path.join(path.dirname(process.env.PLAN_RESPONSE_FILE), "repo");
+      plan = planner(plannerInput, fs.existsSync(previousCheckout) ? previousCheckout : checkout, criteria.length, previous);
+    } else plan = planner(plannerInput, checkout, criteria.length);
+    saved = { plan, sources: research.sources || [], sourceCount: criteria.length, parentBody: parent?.body };
+    fs.writeFileSync(`${checkpoint}.tmp`, JSON.stringify(saved), { mode: 0o600 });
+    fs.renameSync(`${checkpoint}.tmp`, checkpoint);
+    exec("git", ["worktree", "remove", checkout]);
+  }
+  if (process.env.DRY_RUN === "true") console.log(JSON.stringify(saved.plan, null, 2));
+  else write("published.json", publish(saved.plan, batch, saved.sources, existing, parent));
+} catch (error) {
+  write("failure.txt", error.message);
+  console.error(error.message);
+  process.exitCode = 1;
+}

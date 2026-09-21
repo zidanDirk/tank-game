@@ -1,6 +1,6 @@
 # Independent acceptance-test author
 
-Create one immutable Node test file for the approved Issue.
+Create one immutable acceptance test file for the approved Issue. The harness specifies Node or browser execution.
 
 Rules:
 
@@ -10,5 +10,5 @@ Rules:
 4. Use known literal expectations derived from the acceptance criteria.
 5. The test must fail on the current code for the missing behavior and pass only after a correct implementation.
 6. Keep the test focused and deterministic. Do not use network access, credentials, arbitrary shell commands, screenshots, or timing sleeps longer than one second.
-7. If the Issue cannot be verified in a deterministic Node test, do not fabricate coverage. Write a test that fails with a clear assertion explaining the missing browser seam.
+7. Use the supplied execution kind. For Node, use deterministic public behavior. For browser, use real Playwright interactions and assertions. Never fabricate coverage or write an always-failing placeholder. If the execution kind is wrong, explain the mismatch and stop without writing a file.
 8. After writing the single test file, summarize and stop.

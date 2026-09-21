@@ -1,0 +1,40 @@
+name: Record human playtest
+on:
+  pull_request_target:
+    branches: [master]
+    types: [labeled, unlabeled, synchronize, reopened]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+concurrency:
+  group: playtest-record-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      # Deliberately API-only: never checkout or run code from a PR.
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const number = context.payload.pull_request.number;
+            const label = '已经试玩';
+            const marker = '<!-- tank-playtest-v2:';
+            const {data: pr} = await github.rest.pulls.get({owner, repo, pull_number: number});
+            if (context.payload.action === 'synchronize') {
+              if (pr.labels.some(l => l.name === label)) {
+                await github.rest.issues.removeLabel({owner, repo, issue_number: number, name: label});
+              }
+            }
+            if (context.payload.action !== 'labeled' || context.payload.label?.name !== label) return;
+            const {data: access} = await github.rest.repos.getCollaboratorPermissionLevel({owner, repo, username: context.actor});
+            if (!['admin', 'maintain', 'write'].includes(access.permission)) {
+              await github.rest.issues.removeLabel({owner, repo, issue_number: number, name: label});
+              core.setFailed('Only repository writers can approve playtest');
+              return;
+            }
+            if (pr.head.sha !== context.payload.pull_request.head.sha || !pr.labels.some(l => l.name === label)) return;
+            await github.rest.issues.createComment({owner, repo, issue_number: number,
+              body: `${marker}${pr.head.sha} -->\n已经试玩：${context.actor}\n批准仅对应提交 ${pr.head.sha}。新提交须重新试玩。`});

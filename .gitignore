@@ -7,4 +7,5 @@ scripts/loop/harvest/raw/
 scripts/loop/harvest/scored/
 scripts/loop/harvest/queue.md
 artifacts/loop-history/
+artifacts/verify/
 node_modules/.cache/

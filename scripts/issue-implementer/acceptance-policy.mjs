@@ -26,10 +26,11 @@ function normalizePaths(paths) {
   ].sort();
 }
 
-export function classifyAcceptanceChanges(issueNumber, paths) {
+export function classifyAcceptanceChanges(issueNumber, paths, kind = "node") {
   assertIssueNumber(issueNumber);
+  if (!["node", "browser"].includes(kind)) throw new Error("invalid acceptance kind");
 
-  const expectedPath = `tests/acceptance-issue-${issueNumber}.test.js`;
+  const expectedPath = `tests/acceptance-issue-${issueNumber}.${kind === "browser" ? "browser.mjs" : "test.js"}`;
   const actualPaths = normalizePaths(paths);
   const extraPaths = actualPaths.filter((value) => value !== expectedPath);
   let status = "extra";
@@ -51,7 +52,7 @@ export function classifyAcceptanceChanges(issueNumber, paths) {
 }
 
 function main(argv) {
-  if (argv.length !== 2) {
+  if (argv.length < 2 || argv.length > 3) {
     throw new Error(
       "usage: acceptance-policy.mjs ISSUE_NUMBER CHANGED_PATHS_FILE",
     );
@@ -60,7 +61,7 @@ function main(argv) {
   const issueNumber = Number(argv[0]);
   const paths = fs.readFileSync(argv[1], "utf8").split(/\n/u);
   process.stdout.write(
-    `${JSON.stringify(classifyAcceptanceChanges(issueNumber, paths), null, 2)}\n`,
+    `${JSON.stringify(classifyAcceptanceChanges(issueNumber, paths, argv[2] || "node"), null, 2)}\n`,
   );
 }
 

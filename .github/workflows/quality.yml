@@ -57,7 +57,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'synchronize' &&
-      contains(github.event.pull_request.labels.*.name, '人工试玩通过')
+      (contains(github.event.pull_request.labels.*.name, '人工试玩通过') ||
+       contains(github.event.pull_request.labels.*.name, '已经试玩'))
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -68,12 +69,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            for (const name of ['人工试玩通过', '已经试玩']) {
             await github.rest.issues.removeLabel({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              name: "人工试玩通过",
-            });
+              name,
+            }).catch(e => { if (e.status !== 404) throw e; });
+            }
 
   human-playtest:
     name: Human playtest approval
@@ -98,10 +101,10 @@ jobs:
               issue_number: context.issue.number,
             });
             const approved = issue.labels.some((label) =>
-              (typeof label === "string" ? label : label.name) === "人工试玩通过"
+              ['已经试玩', '人工试玩通过'].includes(typeof label === "string" ? label : label.name)
             );
             if (!approved) {
               core.setFailed(
-                "请在最新提交上完成人工试玩，然后添加“人工试玩通过”标签。"
+                "请在最新提交上完成人工试玩，然后添加“已经试玩”标签。"
               );
             }

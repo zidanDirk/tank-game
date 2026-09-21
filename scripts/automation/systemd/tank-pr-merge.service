@@ -1,0 +1,12 @@
+[Unit]
+Description=Merge current-head human-approved tank PRs after CI
+After=network-online.target
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tank-game
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/home/ubuntu/.config/tank-research.env
+ExecStart=/bin/bash /home/ubuntu/tank-game/scripts/daily-research/merge.sh
+TimeoutStartSec=5min
+UMask=0077

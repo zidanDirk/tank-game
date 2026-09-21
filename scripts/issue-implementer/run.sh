@@ -27,7 +27,7 @@ ACCEPTANCE_TURNS=30
 ACCEPTANCE_CONTINUE_TURNS=20
 TEST_REPAIR_TURNS=30
 REVIEW_TURNS=30
-MAX_TEST_REPAIR_PASSES=1
+MAX_TEST_REPAIR_PASSES=3
 MAX_TEST_LOG_CHARS=20000
 MAX_IMPLEMENTATION_FILES=3
 MAX_IMPLEMENTATION_CHANGED_LINES=350
@@ -77,7 +77,9 @@ run_clean() {
 
   clean_env=(env -i \
     HOME="$sandbox_home" \
+    REPO_DIR="$PWD" \
     PATH="$SAFE_PATH" \
+    VERIFY_LOG_DIR="${sandbox_home%/sandbox-home}/verification" \
     CI=true)
   [[ -n "${CHROME_PATH:-}" ]] \
     && clean_env+=(CHROME_PATH="$CHROME_PATH")
@@ -108,6 +110,9 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+
+# HOME changes for verification; the browser cache must not change with it.
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/home/ubuntu/.cache/ms-playwright}"
 
 : "${GH_TOKEN:?GH_TOKEN 未配置}"
 : "${GH_REPO:?GH_REPO 未配置}"
@@ -156,7 +161,7 @@ gh issue list \
   --label "同意实现" \
   --limit 100 \
   --json number,title,body,createdAt,url,labels \
-  | jq 'sort_by(.createdAt) | reverse' > "$ISSUES_FILE"
+  | jq 'sort_by(.createdAt)' > "$ISSUES_FILE"
 
 issue_count="$(jq 'length' "$ISSUES_FILE")"
 
@@ -165,7 +170,7 @@ if [[ "$issue_count" -eq 0 ]]; then
   exit 0
 fi
 
-log "发现 $issue_count 个待实现 Issue，将按创建时间从新到旧处理"
+log "发现 $issue_count 个待实现 Issue，将按创建时间从旧到新处理（依赖未合并则等待）"
 
 cleanup_worktree() {
   local worktree="$1"
@@ -250,101 +255,13 @@ save_resume_state() {
 
 create_split_issues() {
   local number="$1"
-  local issue_file="$2"
-  local assessment_file="$3"
   local run_dir="$4"
-  local plan_file="$run_dir/split-plan.json"
-  local existing_issues="$run_dir/existing-issues.json"
-  local parent_comments="$run_dir/parent-comments.json"
-  local result_file="$run_dir/split-result.md"
-  local child_count child_index child_title child_body_file marker existing_url
-  local child_url comment_marker
-
-  if [[ "$AUTO_CREATE_SPLIT_ISSUES" != "true" ]] \
-    || ! jq -e '.canAutoSplit == true' "$assessment_file" >/dev/null; then
-    return 1
-  fi
-
-  if ! node "$SPLIT_PLAN_SCRIPT" \
-    "$issue_file" "$assessment_file" > "$plan_file"; then
-    return 1
-  fi
-
-  if ! gh issue list \
-    --repo "$GH_REPO" \
-    --state all \
-    --limit 1000 \
-    --json number,url,title,body > "$existing_issues"; then
-    return 1
-  fi
-
-  child_count="$(jq '.children | length' "$plan_file")"
-  : > "$run_dir/split-child-urls.txt"
-
-  for (( child_index = 0; child_index < child_count; child_index++ )); do
-    marker="$(jq -r ".children[$child_index].marker" "$plan_file")"
-    child_title="$(jq -r ".children[$child_index].title" "$plan_file")"
-    child_body_file="$run_dir/split-child-$((child_index + 1)).md"
-    jq -r ".children[$child_index].body" "$plan_file" > "$child_body_file"
-
-    existing_url="$(
-      jq -r \
-        --arg marker "<!-- $marker -->" \
-        '[.[] | select((.body // "") | contains($marker))][0].url // empty' \
-        "$existing_issues"
-    )"
-
-    if [[ -n "$existing_url" ]]; then
-      child_url="$existing_url"
-      log "Issue #$number：复用已存在的拆分 Issue：$child_url"
-    elif ! child_url="$(
-      gh issue create \
-        --repo "$GH_REPO" \
-        --title "$child_title" \
-        --body-file "$child_body_file"
-    )"; then
-      log "Issue #$number：创建第 $((child_index + 1)) 个拆分 Issue 失败"
-      return 1
-    else
-      log "Issue #$number：已创建拆分 Issue：$child_url"
-    fi
-
-    printf '%s\n' "$child_url" >> "$run_dir/split-child-urls.txt"
-  done
-
-  comment_marker="issue-implementer-split-result:${number}"
-  {
-    printf '<!-- %s -->\n\n' "$comment_marker"
-    printf '## 自动拆分结果\n\n'
-    printf '父 Issue 超过自动实现预算，已拆分为以下未审批子 Issue：\n\n'
-    sed 's/^/- /' "$run_dir/split-child-urls.txt"
-    printf '\n每个子 Issue 都需要人工确认范围并添加 `同意实现` 标签。\n'
-  } > "$result_file"
-
-  if ! gh issue view "$number" \
-    --repo "$GH_REPO" \
-    --json comments > "$parent_comments"; then
-    return 1
-  fi
-
-  if ! jq -e \
-    --arg marker "<!-- $comment_marker -->" \
-    'any(.comments[]?; (.body // "") | contains($marker))' \
-    "$parent_comments" >/dev/null; then
-    if ! gh issue comment "$number" \
-      --repo "$GH_REPO" \
-      --body-file "$result_file" >/dev/null; then
-      return 1
-    fi
-  fi
-
-  if ! gh issue edit "$number" \
-    --repo "$GH_REPO" \
-    --remove-label "同意实现" >/dev/null; then
-    return 1
-  fi
-
-  return 0
+  [[ "$AUTO_CREATE_SPLIT_ISSUES" == "true" ]] || return 1
+  local planner_state="${TANK_RESEARCH_STATE_DIR:-$HOME/.local/state/tank-research-v2}"
+  mkdir -p "$planner_state"
+  REPO_DIR="$REPO_DIR" flock -w 60 "$planner_state/run.lock" \
+    node "$REPO_DIR/scripts/daily-research/run.mjs" split "$number" \
+    > "$run_dir/split-planner.log" 2>&1
 }
 
 validate_worktree_changes() {
@@ -369,11 +286,18 @@ validate_worktree_changes() {
   while IFS= read -r path; do
     [[ -z "$path" ]] && continue
 
+    if [[ -f "$run_dir/issue-assessment.json" ]] && \
+      jq -e '.schemaVersion == 2' "$run_dir/issue-assessment.json" >/dev/null && \
+      ! jq -e --arg p "$path" '.referencedFiles | index($p) != null' "$run_dir/issue-assessment.json" >/dev/null; then
+      log "Issue #$number：修改不在批准的 changeFiles 内：$path"
+      return 1
+    fi
+
     case "$path" in
       .github/*|.git|.git/*|.gitignore|.gitmodules|\
       .env|.env.*|scripts/*|bin/*|CLAUDE.md|AGENTS.md|\
       package.json|package-lock.json|npm-shrinkwrap.json|\
-      node_modules/*|tests/acceptance-issue-"$number".test.js)
+      node_modules/*|tests/acceptance-issue-*)
         forbidden_file="$path"
         break
         ;;
@@ -454,7 +378,7 @@ assess_acceptance_changes() {
   } | LC_ALL=C sort -u > "$changes_file"
 
   if ! node "$ACCEPTANCE_POLICY_SCRIPT" \
-    "$number" "$changes_file" > "$assessment_file"; then
+    "$number" "$changes_file" "${acceptance_kind:-node}" > "$assessment_file"; then
     log "Issue #$number：无法判定验收测试阶段的文件改动"
     return 1
   fi
@@ -464,7 +388,7 @@ validate_acceptance_changes() {
   local number="$1"
   local worktree="$2"
   local run_dir="$3"
-  local expected="tests/acceptance-issue-${number}.test.js"
+  local expected="$acceptance_test"
   local assessment_file="$run_dir/acceptance-change-assessment.json"
   local status extra_paths
 
@@ -518,6 +442,8 @@ process_issue() {
   local acceptance_status acceptance_assessment acceptance_session_id
   local acceptance_continue_prompt acceptance_continue_response
   local acceptance_continue_stderr acceptance_continue_status
+  local acceptance_kind failed_stage stage implementation_session
+  local -a implementation_resume=()
   local review_prompt review_response review_stderr review_status review_result
   local review_log_file
 
@@ -556,9 +482,16 @@ process_issue() {
   fi
 
   if ! jq -e \
-    '.state == "OPEN" and any(.labels[]; .name == "同意实现")' \
+    '.state == "OPEN" and any(.labels[]; .name == "同意实现") and
+     all(.labels[]; .name != "未审批" and .name != "拒绝" and .name != "挂起")' \
     "$issue_file" >/dev/null; then
     log "Issue #$number：已关闭或已不再是「同意实现」，跳过"
+    return 0
+  fi
+
+  if ! node "$REPO_DIR/scripts/daily-research/run.mjs" check-deps "$number" \
+    > "$run_dir/dependencies.log" 2>&1; then
+    log "Issue #$number：审批或依赖未就绪，详情：$run_dir/dependencies.log"
     return 0
   fi
 
@@ -673,7 +606,7 @@ process_issue() {
     printf '此 PR 由 Claude Code 使用 MiniMax M3 根据已审批 Issue 自动实现。\n\n'
     printf -- '- 来源：%s\n' "$url"
     printf -- '- 验证：固定单元、构建和真实浏览器检查；独立只读验收审查\n'
-    printf -- '- 合并策略：必须由人类在最新提交上试玩，并添加 `人工试玩通过` 标签后手动合并\n\n'
+    printf -- '- 合并策略：最新提交 CI 通过，人工添加 `已经试玩` 后自动合并\n\n'
     printf -- '- [ ] 已在桌面端试玩主要流程\n'
     printf -- '- [ ] 已在移动端尺寸试玩触控流程\n'
     printf -- '- [ ] 已确认控制台无新增错误\n\n'
@@ -726,8 +659,6 @@ process_issue() {
       return 1
     fi
 
-    save_resume_state \
-      "$resume_file" "$work_parent" "$worktree" "$local_branch" "acceptance"
   fi
 
   if ! (
@@ -742,6 +673,23 @@ process_issue() {
   fi
 
   acceptance_test="tests/acceptance-issue-${number}.test.js"
+  acceptance_kind="$(jq -r '.acceptanceKind // "node"' "$assessment_file")"
+  if [[ "$acceptance_kind" == "browser" ]]; then
+    acceptance_test="tests/acceptance-issue-${number}.browser.mjs"
+  fi
+
+  # Prove the same runtime works before paying for model implementation.
+  if (( resumed == 0 )); then
+    log "Issue #$number：验证主干基线与浏览器环境"
+    if ! (cd "$worktree"; run_clean "$sandbox_home" "$AUTOMATION_DIR/verify.sh" full) \
+      > "$run_dir/baseline.log" 2>&1; then
+      log "Issue #$number：主干基线/环境失败，暂停本批任务；查看 $run_dir/baseline.log"
+      archive_failure "$worktree" "$run_dir"
+      return 78
+    fi
+    save_resume_state \
+      "$resume_file" "$work_parent" "$worktree" "$local_branch" "acceptance"
+  fi
 
   if ! git -C "$worktree" ls-files --error-unmatch \
     "$acceptance_test" >/dev/null 2>&1; then
@@ -753,6 +701,9 @@ process_issue() {
       cp -- "$ACCEPTANCE_PROMPT_FILE" "$acceptance_prompt"
       {
         printf '\nExact allowed output path: `%s`\n' "$acceptance_test"
+        if [[ "$acceptance_kind" == "browser" ]]; then
+          printf '\nBrowser acceptance: write an executable Playwright assertion script, not a Node unit test. Import chromium from @playwright/test and browserLaunchOptions from ./browser-launch.mjs. The harness starts the dev server at http://127.0.0.1:5173 and production at http://127.0.0.1:4173. Check the actual UI behavior; always close the browser in finally. Do not start servers or execute shell commands.\n'
+        fi
         printf '\n<acceptance_contract_json>\n'
         jq '{acceptanceCriteria}' "$assessment_file"
         printf '</acceptance_contract_json>\n'
@@ -881,7 +832,7 @@ process_issue() {
 
     if (
       cd "$worktree"
-      run_clean "$sandbox_home" node --test "$acceptance_test"
+      run_clean "$sandbox_home" "$AUTOMATION_DIR/verify.sh" acceptance "$acceptance_test"
     ) > "$run_dir/acceptance-red.log" 2>&1; then
       log "Issue #$number：验收测试在实现前已经通过，不能证明缺失行为"
       archive_failure "$worktree" "$run_dir"
@@ -926,7 +877,7 @@ process_issue() {
   implementation_pass=1
 
   while [[ "$resume_phase" == "implementation" ]] \
-    && (( implementation_pass <= 2 )); do
+    && (( implementation_pass <= 3 )); do
     max_turns="$IMPLEMENTATION_FIRST_PASS_TURNS"
     pass_prompt="$issue_prompt"
     response_file="$run_dir/claude-response-pass-${implementation_pass}.json"
@@ -965,6 +916,7 @@ process_issue() {
         --disallowedTools "WebFetch,WebSearch,NotebookEdit,Task" \
         --max-turns "$max_turns" \
         --output-format json \
+        "${implementation_resume[@]}" \
         -p "$(<"$pass_prompt")"
     ) < /dev/null > "$response_file" 2> "$stderr_file"; then
       claude_status=0
@@ -982,13 +934,17 @@ process_issue() {
     fi
 
     if is_max_turns_failure "$response_file"; then
-      if (( implementation_pass < 2 )); then
+      if (( implementation_pass < 3 )); then
+        implementation_session="$(jq -r '.session_id // empty' "$response_file")"
+        if [[ "$implementation_session" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
+          implementation_resume=(--resume "$implementation_session")
+        fi
         log "Issue #$number：达到阶段轮次上限，使用当前工作树继续收尾"
         implementation_pass=$((implementation_pass + 1))
         continue
       fi
 
-      log "Issue #$number：两阶段均达到轮次上限；保留当前改动并进入验证"
+      log "Issue #$number：实现轮次预算耗尽；保留当前改动并进入验证"
       break
     fi
 
@@ -1019,17 +975,20 @@ process_issue() {
   test_repair_pass=0
 
   while true; do
-    log "Issue #$number：运行测试"
-
-    if (
-      cd "$worktree"
-      run_clean "$sandbox_home" "$worktree/$VERIFY_SCRIPT_REL" unit
-    ) > "$run_dir/test.log" 2>&1; then
-      break
-    fi
+    failed_stage=""
+    for stage in unit build browser; do
+      log "Issue #$number：运行验证 $stage"
+      if ! (cd "$worktree"; run_clean "$sandbox_home" "$AUTOMATION_DIR/verify.sh" "$stage") \
+        > "$run_dir/$stage.log" 2>&1; then
+        failed_stage="$stage"
+        break
+      fi
+    done
+    cp "$run_dir/unit.log" "$run_dir/test.log"
+    [[ -z "$failed_stage" ]] && break
 
     if (( test_repair_pass >= MAX_TEST_REPAIR_PASSES )); then
-      log "Issue #$number：测试修复后仍失败，不推送"
+      log "Issue #$number：$failed_stage 修复预算耗尽，不推送；证据：$run_dir/$failed_stage.log"
       archive_failure "$worktree" "$run_dir"
       cleanup_worktree "$worktree" "$local_branch" "$work_parent"
       return 1
@@ -1037,7 +996,7 @@ process_issue() {
 
     test_repair_pass=$((test_repair_pass + 1))
     test_tail_file="$run_dir/test-tail-${test_repair_pass}.log"
-    tail -c "$MAX_TEST_LOG_CHARS" "$run_dir/test.log" > "$test_tail_file"
+    tail -c "$MAX_TEST_LOG_CHARS" "$run_dir/$failed_stage.log" > "$test_tail_file"
 
     repair_prompt="$run_dir/test-repair-prompt-${test_repair_pass}.md"
     repair_response="$run_dir/claude-response-repair-${test_repair_pass}.json"
@@ -1106,32 +1065,6 @@ process_issue() {
       return 1
     fi
   done
-
-  log "Issue #$number：运行生产构建"
-
-  if ! (
-    cd "$worktree"
-    run_clean "$sandbox_home" "$worktree/$VERIFY_SCRIPT_REL" build
-  ) > "$run_dir/build.log" 2>&1; then
-
-    log "Issue #$number：构建失败，不推送"
-    archive_failure "$worktree" "$run_dir"
-    cleanup_worktree "$worktree" "$local_branch" "$work_parent"
-    return 1
-  fi
-
-  log "Issue #$number：运行真实浏览器验收"
-
-  if ! (
-    cd "$worktree"
-    run_clean "$sandbox_home" "$worktree/$VERIFY_SCRIPT_REL" browser
-  ) > "$run_dir/browser.log" 2>&1; then
-
-    log "Issue #$number：浏览器验收失败，不推送"
-    archive_failure "$worktree" "$run_dir"
-    cleanup_worktree "$worktree" "$local_branch" "$work_parent"
-    return 1
-  fi
 
   if ! validate_worktree_changes "$number" "$worktree" "$run_dir"; then
     log "Issue #$number：测试或构建后安全检查失败，不推送"
@@ -1235,12 +1168,14 @@ process_issue() {
 
   if ! gh issue view "$number" \
     --repo "$GH_REPO" \
-    --json state,labels \
-    --jq \
-      '.state == "OPEN" and any(.labels[]; .name == "同意实现")' \
-    | grep -qx true; then
+    --json state,labels,body > "$run_dir/issue-before-push.json" || \
+    ! jq -e --slurpfile before "$issue_file" \
+      '.state == "OPEN" and .body == $before[0].body and
+       any(.labels[]; .name == "同意实现") and
+       all(.labels[]; .name != "未审批" and .name != "拒绝" and .name != "挂起")' \
+      "$run_dir/issue-before-push.json" >/dev/null; then
 
-    log "Issue #$number：实现期间审批状态发生变化，不推送"
+    log "Issue #$number：实现期间正文或审批状态发生变化，不推送"
     archive_failure "$worktree" "$run_dir"
     cleanup_worktree "$worktree" "$local_branch" "$work_parent"
     return 1
@@ -1310,6 +1245,11 @@ for issue_number in "${issue_numbers[@]}"; do
     log "MiniMax 额度暂时不可用，停止处理剩余 Issue"
     log "systemd 将在五小时后重新运行；已有 PR 会自动跳过"
     exit 75
+  fi
+
+  if [[ "$process_status" -eq 78 ]]; then
+    log "环境/主干基线失败，停止队列，避免后续 Issue 重复消耗模型额度"
+    exit 78
   fi
 
   if (( process_status != 0 )); then
