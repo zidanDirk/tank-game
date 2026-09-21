@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { readPages } from "./github-pages.mjs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { validatePlan, renderTask, readContract, approved, APPROVAL_LABELS } from "./contract.mjs";
@@ -23,7 +24,7 @@ function exec(command, args, options = {}) {
 }
 function gh(args) { return exec("gh", args); }
 function issue(n) { return JSON.parse(gh(["issue", "view", String(n), "--repo", repo, "--json", "number,title,body,url,labels,state"])); }
-function listIssues() { return JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/issues?state=all&per_page=100`])).flat().filter((i) => !i.pull_request); }
+function listIssues() { return readPages((args) => JSON.parse(gh(args)), `repos/${repo}/issues?state=all`).filter((i) => !i.pull_request); }
 
 function model(name, settings, prompt, cwd, search = false, turns = 40) {
   const env = { ...process.env };
@@ -104,7 +105,7 @@ try {
   const parent = mode === "split" ? issue(Number(process.argv[3])) : null;
   const batch = parent ? `issue-${parent.number}` : day;
   const checkpoint = path.join(state, `plan-${batch}.json`);
-  if (!parent && existing.some((i) => i.body?.includes(`<!-- tank-research:${day} -->`)) && !fs.existsSync(checkpoint)) {
+  if (process.env.DRY_RUN !== "true" && !parent && existing.some((i) => i.body?.includes(`<!-- tank-research:${day} -->`)) && !fs.existsSync(checkpoint)) {
     console.log("今天已有研究 Issue；跳过重复研究");
     process.exit(0);
   }

@@ -6,7 +6,8 @@ set -a
 source "${ENV_FILE:-$HOME/.config/tank-research.env}"
 set +a
 export PATH="/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
-mkdir -p "$HOME/.local/state/tank-research-v2"
-exec 9>"$HOME/.local/state/tank-research-v2/run.lock"
+planner_state="${TANK_RESEARCH_STATE_DIR:-$HOME/.local/state/tank-research-v2}"
+mkdir -p "$planner_state"
+exec 9>"$planner_state/run.lock"
 flock -n 9 || exit 0
 exec node "$REPO_DIR/scripts/daily-research/run.mjs" "${1:-research}" "${2:-}"

@@ -257,7 +257,10 @@ create_split_issues() {
   local number="$1"
   local run_dir="$4"
   [[ "$AUTO_CREATE_SPLIT_ISSUES" == "true" ]] || return 1
-  REPO_DIR="$REPO_DIR" node "$REPO_DIR/scripts/daily-research/run.mjs" split "$number" \
+  local planner_state="${TANK_RESEARCH_STATE_DIR:-$HOME/.local/state/tank-research-v2}"
+  mkdir -p "$planner_state"
+  REPO_DIR="$REPO_DIR" flock -w 60 "$planner_state/run.lock" \
+    node "$REPO_DIR/scripts/daily-research/run.mjs" split "$number" \
     > "$run_dir/split-planner.log" 2>&1
 }
 

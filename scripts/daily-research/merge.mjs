@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { readPages } from "./github-pages.mjs";
 
 export function canMerge(pr, comments) {
   return pr.state === "OPEN" && !pr.isDraft && !pr.isCrossRepository && pr.baseRefName === "master" &&
@@ -24,7 +25,7 @@ function main() {
   const prs = gh(["pr", "list", "--repo", repo, "--base", "master", "--state", "open", "--label", "已经试玩", "--limit", "100", "--json", "number"]);
   for (const { number } of prs) {
     const pr = gh(["pr", "view", String(number), "--repo", repo, "--json", "state,isDraft,isCrossRepository,baseRefName,mergeStateStatus,labels,headRefOid,statusCheckRollup"]);
-    const comments = gh(["api", "--paginate", "--slurp", `repos/${repo}/issues/${number}/comments?per_page=100`]).flat();
+    const comments = readPages(gh, `repos/${repo}/issues/${number}/comments`);
     if (!canMerge(pr, comments)) { console.log(`#${number}: 等待 CI、当前 SHA 试玩记录或分支更新`); continue; }
     // REST merge checks the expected head SHA and repository protection again atomically.
     const result = gh(["api", `repos/${repo}/pulls/${number}/merge`, "--method", "PUT", "-f", `sha=${pr.headRefOid}`, "-f", "merge_method=squash"]);
