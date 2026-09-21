@@ -33,7 +33,7 @@ export function validateTask(task) {
     throw new Error("estimatedChangedLines must be 1–350");
   }
   for (const key of ["acceptance", "outOfScope", "manualPlaytest"]) {
-    if (!Array.isArray(task[key]) || task[key].length < 1 || task[key].length > (key === "acceptance" ? 3 : 6)) {
+    if (!Array.isArray(task[key]) || task[key].length < 1 || task[key].length > (key === "acceptance" ? 10 : 6)) {
       throw new Error(`invalid ${key} list`);
     }
     task[key].forEach((v) => text(v, key));

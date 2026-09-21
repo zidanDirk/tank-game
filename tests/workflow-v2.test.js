@@ -20,6 +20,14 @@ test("a semantic split must preserve every original criterion", () => {
   plan.tasks[0].sourceCriteria.push(2);
   assert.equal(validatePlan(plan, 2), plan);
 });
+test("edge-case coverage does not inflate the modification budget", () => {
+  const t = task();
+  t.acceptance = Array.from({ length: 7 }, (_, i) => `Prediction edge case ${i}`);
+  const result = assessIssue({ number: 15, title: t.title, body: renderTask(t, "test", []) });
+  assert.equal(result.classification, "eligible");
+  t.acceptance = Array.from({ length: 11 }, (_, i) => `Case ${i}`);
+  assert.throws(() => validatePlan({ title: "Plan", summary: "One feature", tasks: [t] }), /acceptance/);
+});
 test("unknown, circular or forward dependencies and excessive changes are rejected", () => {
   const plan = { title: "Warnings", summary: "Predict hazards", tasks: [task()] };
   plan.tasks[0].dependsOn = ["predict"];

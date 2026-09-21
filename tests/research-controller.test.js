@@ -33,10 +33,22 @@ const state = JSON.parse(fs.readFileSync(file));
 state.calls.push([name, ...args.filter((_, i) => i === 0 || args[i - 1] !== '-p')]);
 let out = '';
 if (name === 'git' && args[0] === 'worktree' && args[1] === 'add') fs.mkdirSync(args[3], {recursive:true});
-if (name === 'claude') out = JSON.stringify({structured_output:state.plan});
+if (name === 'claude') {
+  if (state.exhaustOnce) {
+    state.exhaustOnce = false;
+    out = JSON.stringify({is_error:true,subtype:'error_max_turns',session_id:'a6e91ac4-3824-411e-9b6d-175dacd946ed'});
+  } else {
+    const draft = JSON.parse(JSON.stringify(state.plan));
+    if (state.invalidOnce) {
+      state.invalidOnce = false;
+      draft.tasks[0].changeFiles = ['src/a.js','src/b.js','src/c.js','src/d.js'];
+    }
+    out = JSON.stringify({structured_output:draft,session_id:'a6e91ac4-3824-411e-9b6d-175dacd946ed'});
+  }
+}
 if (name === 'gh') {
   if (args[0] === 'api') out = JSON.stringify(state.issues);
-  if (args[0] === 'issue' && args[1] === 'view') out = JSON.stringify({number:15,title:'Parent',body:'- [ ] Behavior works',state:'OPEN',labels:[{name:'同意实现'}]});
+  if (args[0] === 'issue' && args[1] === 'view') out = JSON.stringify({number:15,title:'Parent',body:'- [ ] Behavior works',state:state.closed ? 'CLOSED' : 'OPEN',labels:[{name:'同意实现'}]});
   if (args[0] === 'issue' && args[1] === 'create') {
     const body = fs.readFileSync(args[args.indexOf('--body-file') + 1], 'utf8');
     const number = 100 + state.issues.length;
@@ -66,6 +78,44 @@ process.stdout.write(out);
     assert.match(result.issues[1].body, /#100 的实现 PR 必须先合并/);
     assert.equal(result.calls.filter(([name]) => name === "claude").length, 1);
     assert.ok(result.calls.some((args) => args.includes("挂起")));
+    fs.writeFileSync(fixture, JSON.stringify({ ...result, closed: true }));
+    const closed = invoke();
+    assert.equal(closed.status, 1);
+    assert.match(closed.stderr, /open approved parent/);
+    assert.equal(JSON.parse(fs.readFileSync(fixture)).issues.length, 2);
+
+    const responseFile = path.join(dir, "research-response.json");
+    const research = { title: "Research", summary: "One finding", sources: [
+      { url: "http://example.org/reference", finding: "Public reference" },
+      { url: "https://example.org/other", finding: "Second reference" },
+    ] };
+    fs.writeFileSync(responseFile, JSON.stringify({ result: JSON.stringify(research) }));
+    const beforePreview = JSON.parse(fs.readFileSync(fixture));
+    fs.writeFileSync(fixture, JSON.stringify({ ...beforePreview, exhaustOnce: true, invalidOnce: true }));
+    const preview = spawnSync(process.execPath, [script, "research"], {
+      env: { PATH: bin, HOME: dir, REPO_DIR: dir, FIXTURE: fixture,
+        TANK_RESEARCH_STATE_DIR: path.join(dir, "research-state"),
+        RESEARCH_RESPONSE_FILE: responseFile, DRY_RUN: "true" },
+      encoding: "utf8",
+    });
+    assert.equal(preview.status, 0, preview.stderr);
+    const afterPreview = JSON.parse(fs.readFileSync(fixture));
+    assert.equal(afterPreview.issues.length, 2, "preview never publishes");
+    assert.equal(afterPreview.calls.filter(([name]) => name === "claude").length, 4,
+      "resume reuses research, finalizes once, then repairs an oversized plan without rereading");
+    const finalization = afterPreview.calls.filter(([name]) => name === "claude").at(-1);
+    assert.equal(finalization[finalization.indexOf("--tools") + 1], "");
+    assert.ok(finalization.includes("--resume"));
+    research.sources[0].url = "javascript:alert(1)";
+    fs.writeFileSync(responseFile, JSON.stringify({ result: JSON.stringify(research) }));
+    const invalid = spawnSync(process.execPath, [script, "research"], {
+      env: { PATH: bin, HOME: dir, REPO_DIR: dir, FIXTURE: fixture,
+        TANK_RESEARCH_STATE_DIR: path.join(dir, "invalid-state"),
+        RESEARCH_RESPONSE_FILE: responseFile, DRY_RUN: "true" },
+      encoding: "utf8",
+    });
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /HTTP\(S\) sources/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

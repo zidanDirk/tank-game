@@ -37,6 +37,8 @@ sudo journalctl -u tank-issue-implementer.service -n 80 -f -o cat
 
 研究发布按北京时间日期幂等。`DRY_RUN=true bash scripts/daily-research/run.sh split 15` 仅生成并缓存拆分预览；正式运行复用校验通过的计划，创建未审批子 Issue。父 Issue 正文变化时停止，需保留旧计划后重新规划。
 
+拆分发布前及模型完成后都会检查父 Issue 仍然开放且唯一标记“同意实现”；已关闭任务可以预览，但不会被重新发布。模型到达轮次上限时只额外恢复一次原会话（最多 12 轮），关闭所有工具收尾输出 JSON，不重新进行研究。已成功研究按日期缓存，规划重试可复用。运维恢复可使用 `RESEARCH_RESPONSE_FILE` 或 `PLAN_RESPONSE_FILE` 指向同一任务已归档的响应；这些变量只应临时设置，不写入长期服务配置。
+
 ## 失败证据
 
 - 研究与规划：`~/.local/state/tank-research-v2/` 下的提示、结果、校验错误与发布记录。
