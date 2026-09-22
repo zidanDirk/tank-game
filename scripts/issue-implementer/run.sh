@@ -98,6 +98,7 @@ for required_file in \
   "$SPLIT_PLAN_SCRIPT" \
   "$ACCEPTANCE_POLICY_SCRIPT" \
   "$REVIEW_POLICY_SCRIPT" \
+  "$AUTOMATION_DIR/review-context.mjs" \
   "$MODEL_VERIFY_COMMAND" \
   "$AUTOMATION_DIR/verify.sh"; do
   if [[ ! -f "$required_file" ]]; then
@@ -1091,7 +1092,7 @@ process_issue() {
   cp -- "$REVIEW_PROMPT_FILE" "$review_prompt"
   {
     printf '\n<acceptance_contract_json>\n'
-    jq '{acceptanceCriteria}' "$assessment_file"
+    node "$AUTOMATION_DIR/review-context.mjs" "$issue_file" "$assessment_file" || return 1
     printf '</acceptance_contract_json>\n'
     printf '\n<changed_files_json>\n'
     jq -Rn '[inputs]' < "$run_dir/changed-files.txt"

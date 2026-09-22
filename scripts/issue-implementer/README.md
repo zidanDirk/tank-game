@@ -15,7 +15,13 @@ This automation turns a small, human-approved GitHub Issue into a pull request. 
 3. The implementation model cannot use general Bash, the network, GitHub credentials, dependency manifests, automation files, or the immutable acceptance test. Its only executable tool selects the fixed `unit` or `build` verifier with a credential-free environment and timeout.
 4. Unit tests, a production build, and the three browser scenarios run through `verify.sh`.
 5. A final read-only model pass must account for every acceptance criterion using a validated JSON protocol.
-6. The pull request is created only after all automated gates pass. Merging additionally requires the `人工试玩通过` label. Any new commit removes stale playtest approval, forcing a fresh playtest of the current head.
+6. The pull request is created only after all automated gates pass. Merging additionally requires the `已经试玩` label and trusted approval for the current head. Any new commit invalidates stale playtest approval, forcing a fresh playtest of the current head.
+
+### Review scope and response format
+
+The reviewer receives the original Issue, goal, allowed files, exclusions, dependencies, and ordered acceptance criteria. A configuration/API slice is reviewed at its public exports; a later scene-integration slice is not an implicit requirement. Runtime requirements still need a production call path. Exclusions never excuse regressions or security defects.
+
+The parser accepts a bare JSON object or one terminal `json` code fence with an unambiguous prose preamble. Malformed data, competing objects/fences, trailing commentary, incomplete model responses, missing criteria and unknown results stay blocked. Parsing an existing `request_changes` does **not** approve it: a new independent review is required after correcting context or code.
 
 ## Runtime prerequisites
 
