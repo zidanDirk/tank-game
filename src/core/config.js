@@ -512,3 +512,132 @@ export function seededRandom(seed = 1990) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// Lighting preset catalog. Each preset describes the lighting rig parameters
+// for a stage of the day cycle. The values are pure data — mounting them onto a
+// live scene happens elsewhere (see LightingRig). All numeric fields use plain
+// numbers so the catalog is easy to diff and to consume from tests.
+export const LIGHTING_PRESETS = {
+  noon: {
+    sun: {
+      color: 0xfff4d6,
+      intensity: 1.55,
+      azimuth: 0.78,
+      elevation: 1.1,
+    },
+    hemi: {
+      skyColor: 0xbcdcff,
+      groundColor: 0x6b5638,
+      intensity: 0.65,
+    },
+    ambient: {
+      color: 0xffffff,
+      intensity: 0.18,
+    },
+    background: {
+      top: 0x9fc6ff,
+      bottom: 0xc5b48a,
+    },
+    envIntensity: 1.0,
+    toneMappingExposure: 1.05,
+  },
+  overcast: {
+    sun: {
+      color: 0xe6ecf2,
+      intensity: 0.85,
+      azimuth: 0.0,
+      elevation: 0.55,
+    },
+    hemi: {
+      skyColor: 0xc8d0d8,
+      groundColor: 0x6a6a6a,
+      intensity: 0.85,
+    },
+    ambient: {
+      color: 0xd6dde4,
+      intensity: 0.32,
+    },
+    background: {
+      top: 0xa8b4be,
+      bottom: 0x8c8a86,
+    },
+    envIntensity: 0.75,
+    toneMappingExposure: 1.0,
+  },
+  dusk: {
+    sun: {
+      color: 0xff8a55,
+      intensity: 1.1,
+      azimuth: -1.3,
+      elevation: 0.18,
+    },
+    hemi: {
+      skyColor: 0xffb182,
+      groundColor: 0x3a2238,
+      intensity: 0.55,
+    },
+    ambient: {
+      color: 0xffd1a0,
+      intensity: 0.22,
+    },
+    background: {
+      top: 0xff7a4a,
+      bottom: 0x2b1e3a,
+    },
+    envIntensity: 0.9,
+    toneMappingExposure: 1.1,
+  },
+  night: {
+    sun: {
+      color: 0x6f86b8,
+      intensity: 0.35,
+      azimuth: 0.4,
+      elevation: -0.4,
+    },
+    hemi: {
+      skyColor: 0x3b4f7a,
+      groundColor: 0x121826,
+      intensity: 0.25,
+    },
+    ambient: {
+      color: 0x4a5680,
+      intensity: 0.14,
+    },
+    background: {
+      top: 0x0b1428,
+      bottom: 0x070912,
+    },
+    envIntensity: 0.4,
+    toneMappingExposure: 0.95,
+  },
+};
+
+// pickLightingPreset maps a (mode, level, wave) tuple to the preset key that
+// should drive the scene's lighting rig. It is intentionally side-effect free
+// and never touches the scene graph — keeping it pure makes it trivial to test
+// and to call from level intros / replay scrubbers.
+//
+// Modes:
+//   - "campaign": level index picks the preset deterministically (level 0 →
+//     noon, level 1 → overcast, level 2 → dusk, anything ≥ 3 → night).
+//   - "endless": cycles through all four presets every wave, regardless of the
+//     level (the level is accepted for symmetry but unused).
+//   - anything else: returns the first preset key (currently "noon") without
+//     throwing.
+const LIGHTING_CAMPAIGN_BY_LEVEL = ["noon", "overcast", "dusk", "night"];
+export const LIGHTING_PRESET_KEYS = Object.keys(LIGHTING_PRESETS);
+export function pickLightingPreset(mode, level = 0, wave = 1) {
+  if (mode === "campaign") {
+    const idx = Math.max(0, Math.floor(Number(level) || 0));
+    if (idx < LIGHTING_CAMPAIGN_BY_LEVEL.length) {
+      return LIGHTING_CAMPAIGN_BY_LEVEL[idx];
+    }
+    return "night";
+  }
+  if (mode === "endless") {
+    const order = LIGHTING_PRESET_KEYS;
+    const w = Math.max(1, Math.floor(Number(wave) || 1));
+    return order[(w - 1) % order.length];
+  }
+  return LIGHTING_PRESET_KEYS[0];
+}
