@@ -16,9 +16,27 @@ function parseModelResult(response) {
   if (response.result.length > MAX_REVIEW_CHARACTERS) {
     throw new RangeError("model review result is too large");
   }
+  const text = response.result.trim();
   try {
-    return JSON.parse(response.result);
+    return JSON.parse(text);
   } catch {
+    // Accept one terminal JSON fence, not arbitrary brace extraction or repair.
+    // Reject competing objects/fences in the preamble and any trailing prose.
+    const fenced = text.match(
+      /^([\s\S]*?)```json[ \t]*\r?\n([\s\S]*?)\r?\n```$/u,
+    );
+    if (
+      fenced &&
+      (!fenced[1] || fenced[1].endsWith("\n")) &&
+      !/[{}]|```/u.test(fenced[1]) &&
+      !fenced[2].includes("```")
+    ) {
+      try {
+        return JSON.parse(fenced[2]);
+      } catch {
+        // Malformed model data must never become an approval.
+      }
+    }
     throw new SyntaxError("model review result must be valid JSON");
   }
 }
