@@ -15,6 +15,13 @@ export class Input {
     this.keys = new Map();
     this.firing = false;
     this.mouseAim = false;
+    this.aimMode = "independent";
+    try {
+      if (localStorage.getItem("tank-aim-mode") === "classic")
+        this.aimMode = "classic";
+    } catch {
+      /* Settings remain usable without storage. */
+    }
     this.target = null;
     this.ray = new THREE.Raycaster();
     this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -35,9 +42,10 @@ export class Input {
       game.audio.unlock();
       if (e.code in keys) {
         this.keys.set(e.code, keys[e.code]);
-        if (!e.repeat) this.mouseAim = false;
+        if (!e.repeat && this.aimMode === "classic") this.mouseAim = false;
       }
       if (e.code === "Space") this.firing = true;
+      if (!e.repeat && e.code === "KeyQ") game.activateEMP?.();
       if (!e.repeat && (e.code === "KeyP" || e.code === "Escape"))
         game.togglePause();
       if (!e.repeat && e.code === "KeyR") game.restart();
@@ -140,7 +148,7 @@ export class Input {
       }
     });
     const release = (e) => {
-      this.firing = false;
+      if (e?.pointerType !== "touch") this.firing = false;
       if (e && e.pointerType === "touch" && this.touchAim.has(e.pointerId)) {
         this.touchAim.delete(e.pointerId);
         if (this.touchAim.size === 0) {
@@ -161,6 +169,7 @@ export class Input {
     };
     canvas.addEventListener("pointerup", release);
     canvas.addEventListener("pointercancel", release);
+    canvas.addEventListener("lostpointercapture", release);
     for (const button of document.querySelectorAll("[data-control]")) {
       const action = button.dataset.control;
       button.addEventListener("pointerdown", (e) => {
@@ -282,6 +291,14 @@ export class Input {
   get direction() {
     const vals = [...this.keys.values()];
     return vals.length ? vals[vals.length - 1] : null;
+  }
+  setAimMode(mode) {
+    this.aimMode = mode === "classic" ? "classic" : "independent";
+    this.mouseAim = false;
+    this.target = null;
+    try {
+      localStorage.setItem("tank-aim-mode", this.aimMode);
+    } catch {}
   }
   clear() {
     this.keys.clear();

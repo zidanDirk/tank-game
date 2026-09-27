@@ -22,6 +22,7 @@ import {
 } from "./config.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
+import { NeonRenderer } from "../world/NeonRenderer.js";
 import {
   PlayerTank,
   EnemyTank,
@@ -35,10 +36,8 @@ import { Effects } from "../systems/Effects.js";
 import { AudioSystem } from "../systems/AudioSystem.js";
 import { Leaderboard } from "../systems/Leaderboard.js";
 import { RunUpgradeSystem } from "../systems/RunUpgradeSystem.js";
-import {
-  collectBriefingEntries,
-  pickTopBriefing,
-} from "./briefing.js";
+import { activateEMP, EMP } from "../systems/EMPSystem.js";
+import { collectBriefingEntries, pickTopBriefing } from "./briefing.js";
 
 const _tmpVec = new THREE.Vector3();
 
@@ -55,9 +54,13 @@ export class GameManager {
     this.accumulator = 0;
     this.lastTime = 0;
     this.fps = 60;
+    this.reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     this.pickups = [];
     this.activeBuffs = new Map();
     this.wave = 0;
+    this.empCooldownLeft = 0;
     this.modifiers = [];
     this.runUpgrades = new RunUpgradeSystem();
     this.pendingUpgradeTransition = null;
@@ -65,7 +68,7 @@ export class GameManager {
     this.attempt = 1;
     this.boss = null;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xe9ecdf);
+    this.scene.background = new THREE.Color(0x0b1523);
     this.camera = new THREE.OrthographicCamera(-17, 17, 17, -17, 0.1, 150);
     this.camera.position.set(13, 38, 35);
     this.cameraBase = { x: 13, z: 35 };
@@ -89,9 +92,9 @@ export class GameManager {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.3;
+    this.renderer.toneMappingExposure = 1.15;
     container.appendChild(this.renderer.domElement);
-    const sun = new THREE.DirectionalLight(0xfff4db, 3);
+    const sun = new THREE.DirectionalLight(0xb8d9ff, 2.6);
     sun.position.set(-7, 28, 5);
     sun.target.position.set(13, 0, 13);
     sun.castShadow = true;
@@ -106,7 +109,35 @@ export class GameManager {
     });
     sun.shadow.normalBias = 0.04;
     sun.shadow.bias = -0.0001;
-    this.scene.add(sun, sun.target, new THREE.AmbientLight(0xe8eee0, 1.5));
+    this.scene.add(
+      sun,
+      sun.target,
+      new THREE.HemisphereLight(0x8bbfff, 0x263249, 2),
+    );
+    const rim = new THREE.DirectionalLight(0x9b72ff, 1.3);
+    rim.position.set(28, 12, 20);
+    this.scene.add(rim);
+    this.neonRenderer = new NeonRenderer(
+      this.renderer,
+      this.scene,
+      this.camera,
+    );
+    const visualQuality = document.getElementById("visual-quality");
+    let quality = window.matchMedia("(pointer: coarse)").matches
+      ? "low"
+      : "high";
+    try {
+      quality = localStorage.getItem("tank-visual-quality") || quality;
+    } catch {}
+    visualQuality.value = quality === "low" ? "low" : "high";
+    this.neonRenderer.setQuality(visualQuality.value);
+    visualQuality.addEventListener("change", () => {
+      this.neonRenderer.setQuality(visualQuality.value);
+      try {
+        localStorage.setItem("tank-visual-quality", visualQuality.value);
+      } catch {}
+      this.container.focus({ preventScroll: true });
+    });
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
       new THREE.ShadowMaterial({ opacity: 0.12 }),
@@ -119,6 +150,25 @@ export class GameManager {
     this.effects = new Effects(this.scene, () => this.rng());
     this.bullets = new BulletManager(this);
     this.input = new Input(this, this.renderer.domElement);
+    this.empButton = document.getElementById("emp-btn");
+    this.empStatus = document.getElementById("emp-status");
+    this.empButton.addEventListener("click", () => this.activateEMP());
+    this.touchEMP = document.getElementById("touch-emp");
+    this.touchEMP.addEventListener("click", () => this.activateEMP());
+    const aimMode = document.getElementById("aim-mode");
+    aimMode.value = this.input.aimMode;
+    const syncAimHelp = () => {
+      document.querySelector(".aim-help").textContent =
+        aimMode.value === "classic"
+          ? "经典操作：方向键同时控制炮塔"
+          : "独立瞄准：移动不改变炮塔方向";
+    };
+    syncAimHelp();
+    aimMode.addEventListener("change", () => {
+      this.input.setAimMode(aimMode.value);
+      syncAimHelp();
+      this.container.focus({ preventScroll: true });
+    });
     this._initTouchAimLine();
     this.ui = Object.fromEntries(
       [
@@ -268,10 +318,7 @@ export class GameManager {
         "aria-label",
         `${tier.label} · ${tier.summary}。${tier.description}`,
       );
-      button.setAttribute(
-        "aria-pressed",
-        String(tier.id === this.difficulty),
-      );
+      button.setAttribute("aria-pressed", String(tier.id === this.difficulty));
       const label = document.createElement("strong");
       label.textContent = tier.label;
       const english = document.createElement("small");
@@ -280,9 +327,7 @@ export class GameManager {
       button.addEventListener("click", () => this.setDifficulty(tier.id));
       root.appendChild(button);
     }
-    this._difficultyButtons = Array.from(
-      root.querySelectorAll("button"),
-    );
+    this._difficultyButtons = Array.from(root.querySelectorAll("button"));
   }
   setDifficulty(id) {
     const tier = DIFFICULTY_BY_ID[id];
@@ -338,12 +383,12 @@ export class GameManager {
       this.mode === "endless"
         ? computeEffectiveScaling(this.difficulty, wave)
         : {
-            fireMul: (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
+            fireMul:
+              (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
             speedMul:
               (this.levelConfig?.speedMultiplier ?? 1) * tier.enemySpeedMul,
           };
-    const stage =
-      this.mode === "endless" ? `第 ${wave} 波` : `第 ${wave} 关`;
+    const stage = this.mode === "endless" ? `第 ${wave} 波` : `第 ${wave} 关`;
     const headline = `${stage} · 速 ×${scaling.speedMul.toFixed(2)} · 射 ×${(
       1 / scaling.fireMul
     ).toFixed(2)}`;
@@ -360,7 +405,10 @@ export class GameManager {
     const subline = subBits.length ? subBits.join(" · ") : tier.description;
     const bannerTone = tone === "assertive" ? "alert" : "info";
     this._showThreatBanner(headline, subline, bannerTone);
-    this._announceBriefing(`${stage} · ${tier.label} · ${headline} · ${subline}`, tone);
+    this._announceBriefing(
+      `${stage} · ${tier.label} · ${headline} · ${subline}`,
+      tone,
+    );
     this._lastBriefingAt = this.time ?? 0;
   }
   _showThreatBanner(headline, subline, tone) {
@@ -434,7 +482,8 @@ export class GameManager {
             fireMul:
               (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
           };
-    const ratio = (scaling.speedMul / Math.max(0.01, scaling.fireMul)) * tier.hazardMul;
+    const ratio =
+      (scaling.speedMul / Math.max(0.01, scaling.fireMul)) * tier.hazardMul;
     let tone = "calm";
     if (ratio >= 1.35) tone = "intense";
     else if (ratio >= 1.1) tone = "hot";
@@ -464,7 +513,7 @@ export class GameManager {
     return `难度 ${tier.label} · ${stage} · 终速 ×${speedShown} · 终射 ×${fireShown}`;
   }
   presentUpgradeChoices(transition) {
-    const choices = this.runUpgrades.roll(this.rng, 3);
+    const choices = this.runUpgrades.roll(this.rng, 3, this.mode);
     if (!choices.length) {
       this.continueAfterUpgrade(transition);
       return;
@@ -531,6 +580,7 @@ export class GameManager {
       this.beginEndlessWave(transition.nextWave);
   }
   reset(levelIndex = this.levelIndex, preserveCampaign = true) {
+    this.empCooldownLeft = 0;
     const nextLevel = Math.max(0, Math.min(levelIndex, LEVELS.length - 1));
     this.levelIndex = nextLevel;
     this.levelConfig = LEVELS[nextLevel];
@@ -571,6 +621,7 @@ export class GameManager {
     this._currentBriefingId = null;
   }
   resetEndless(wave = 1) {
+    if (wave === 1) this.empCooldownLeft = 0;
     this.input.clear();
     this.input.mouseAim = false;
     this.input.target = null;
@@ -629,7 +680,7 @@ export class GameManager {
       spawnInterval: scaling.spawnInterval,
       speedMultiplier: scaling.speedMul,
       fireMultiplier: scaling.fireMul,
-        difficulty: scaling.tier.id,
+      difficulty: scaling.tier.id,
       map: "endless",
       allowPowerups: true,
       wave,
@@ -1360,6 +1411,7 @@ export class GameManager {
   }
   tick(dt) {
     this.time += dt;
+    this.empCooldownLeft = Math.max(0, (this.empCooldownLeft ?? 0) - dt);
     if (this.player.alive) this.player.tick(dt);
     for (const enemy of this.enemies) if (enemy.alive) enemy.tick(dt);
     this.bullets.tick(dt);
@@ -1424,13 +1476,14 @@ export class GameManager {
       else this.spawnTimer = 0.6;
     }
     this.effects.tick(dt);
-    this.map.tick(this.time);
+    this.map.tick(this.reducedMotion ? 0 : this.time);
     this.ui.elapsed.textContent = `${String(Math.floor(this.time / 60)).padStart(2, "0")}:${String(Math.floor(this.time % 60)).padStart(2, "0")}`;
   }
   resize() {
     const w = this.container.clientWidth,
       h = this.container.clientHeight;
     this.renderer.setSize(w, h);
+    this.neonRenderer?.resize(w, h);
     const aspect = w / h;
     const height = Math.max(28.5, 29.5 / aspect);
     this.camera.left = (-height * aspect) / 2;
@@ -1438,6 +1491,38 @@ export class GameManager {
     this.camera.top = height / 2;
     this.camera.bottom = -height / 2;
     this.camera.updateProjectionMatrix();
+  }
+  activateEMP() {
+    this.audio.unlock();
+    const activated = activateEMP(this);
+    this.syncEMP();
+    return activated;
+  }
+  syncEMP() {
+    if (!this.empButton) return;
+    const available = this.mode === "endless";
+    const ready =
+      available &&
+      this.state === "playing" &&
+      this.player?.alive &&
+      this.empCooldownLeft <= 0;
+    this.empButton.disabled = !ready;
+    if (this.touchEMP) {
+      this.touchEMP.disabled = !ready;
+      this.touchEMP.textContent = !available
+        ? "EMP · 无尽"
+        : this.empCooldownLeft > 0
+          ? `EMP ${Math.ceil(this.empCooldownLeft)}s`
+          : "EMP 就绪";
+    }
+    this.empButton.dataset.ready = String(!!ready);
+    const label = !available
+      ? "无尽模式解锁 · 范围 4 格"
+      : this.empCooldownLeft > 0
+        ? `充能 ${Math.ceil(this.empCooldownLeft)}s / ${EMP.cooldown}s`
+        : "清除近身敌弹 · 干扰敌军 2 秒";
+    if (this.empStatus.textContent !== label)
+      this.empStatus.textContent = label;
   }
   frame(ms) {
     const rawDt = this.lastTime
@@ -1470,7 +1555,8 @@ export class GameManager {
     this.camera.position.x = this.cameraBase.x + shake.x;
     this.camera.position.z = this.cameraBase.z + shake.z;
     this._updateTouchAimLine();
-    this.renderer.render(this.scene, this.camera);
+    this.syncEMP();
+    this.neonRenderer.render();
     this.camera.position.x = this.cameraBase.x;
     this.camera.position.z = this.cameraBase.z;
     requestAnimationFrame((t) => this.frame(t));
@@ -1486,7 +1572,7 @@ export class GameManager {
       new THREE.BufferAttribute(new Float32Array(6), 3),
     );
     const mat = new THREE.LineBasicMaterial({
-      color: 0xda6b38,
+      color: 0x56eee4,
       transparent: true,
       opacity: 0.55,
     });
@@ -1495,6 +1581,19 @@ export class GameManager {
     this._touchAimLine.visible = false;
     this._touchAimLine.renderOrder = 5;
     this.scene.add(this._touchAimLine);
+    this.aimReticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.18, 0.23, 4),
+      new THREE.MeshBasicMaterial({
+        color: 0x56eee4,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.9,
+      }),
+    );
+    this.aimReticle.rotation.x = -Math.PI / 2;
+    this.aimReticle.visible = false;
+    this.aimReticle.renderOrder = 6;
+    this.scene.add(this.aimReticle);
     this._touchAimCursorEl = document.getElementById("touch-aim-cursor");
     if (this.input) this._wireTouchAimHaptics();
   }
@@ -1522,31 +1621,38 @@ export class GameManager {
     const target = this.input?.target;
     const active =
       this.state === "playing" &&
-      this.input?.activeTouchAim &&
       player?.alive &&
-      target;
+      (this.input?.mouseAim || this.input?.direction !== null);
     if (!active) {
       if (line.visible) line.visible = false;
+      this.aimReticle.visible = false;
       this._updateTouchAimCursor(false);
       return;
     }
-    const dx = target.x - player.x;
-    const dz = target.z - player.z;
-    const len = Math.hypot(dx, dz);
-    const MAX_LEN = 6; // 6 cells = the issue's "射程 6 格" cap
-    let ex = target.x;
-    let ez = target.z;
-    if (len > MAX_LEN) {
-      const k = MAX_LEN / (len || 1);
-      ex = player.x + dx * k;
-      ez = player.z + dz * k;
-    }
+    const len =
+      this.input.mouseAim && target
+        ? Math.min(6, Math.hypot(target.x - player.x, target.z - player.z))
+        : 6;
+    const dx = Math.sin(player.aim) * len;
+    const dz = -Math.cos(player.aim) * len;
+    const hit = this.collision.trace(
+      { x: player.x, z: player.z, team: "player" },
+      dx,
+      dz,
+    );
+    const ex = player.x + dx * (hit?.time ?? 1);
+    const ez = player.z + dz * (hit?.time ?? 1);
+    const color = hit ? 0xff9666 : 0x56eee4;
+    line.material.color.setHex(color);
+    this.aimReticle.material.color.setHex(color);
+    this.aimReticle.position.set(ex, 0.06, ez);
+    this.aimReticle.visible = true;
     const arr = line.geometry.attributes.position.array;
     arr[0] = player.x;
-    arr[1] = 0.42;
+    arr[1] = 0.06;
     arr[2] = player.z;
     arr[3] = ex;
-    arr[4] = 0.42;
+    arr[4] = 0.06;
     arr[5] = ez;
     line.geometry.attributes.position.needsUpdate = true;
     line.geometry.computeBoundingSphere();
@@ -1584,8 +1690,7 @@ export class GameManager {
               (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
           };
     const ratio = scaling.speedMul / Math.max(0.01, scaling.fireMul);
-    const badge =
-      ratio >= 1.35 ? "intense" : ratio >= 1.1 ? "hot" : "calm";
+    const badge = ratio >= 1.35 ? "intense" : ratio >= 1.1 ? "hot" : "calm";
     return {
       state: this.state,
       mode: this.mode,
@@ -1612,6 +1717,9 @@ export class GameManager {
       buffs: [...this.activeBuffs.keys()],
       runUpgrades: this.runUpgrades?.snapshot?.() ?? [],
       upgradeChoices: [...(this.runUpgrades?.choices ?? [])],
+      empCooldownLeft: this.empCooldownLeft ?? 0,
+      aimMode: this.input?.aimMode ?? "independent",
+      visualQuality: this.neonRenderer?.quality ?? "low",
       player: {
         x: this.player.x,
         z: this.player.z,
@@ -1696,6 +1804,7 @@ function buildPresetMap(scene, preset, rng) {
   m.rectangle(11, 21, 4, 1, CELL.BRICK);
   m.rectangle(11, 22, 1, 2, CELL.BRICK);
   m.rectangle(14, 22, 1, 2, CELL.BRICK);
+  m.reserveSpawnLanes();
   // Resize instance meshes if the preset has more cells than the initial capacity.
   const needBricks = m.cells.filter((t) => t === CELL.BRICK).length * 6;
   const needSteel = m.cells.filter((t) => t === CELL.STEEL).length;
@@ -1705,7 +1814,7 @@ function buildPresetMap(scene, preset, rng) {
       m.bricks.material,
       needBricks,
     );
-    bigger.copy(m.bricks);
+    bigger.castShadow = bigger.receiveShadow = true;
     m.root.remove(m.bricks);
     m.bricks.dispose?.();
     m.bricks = bigger;
@@ -1715,9 +1824,9 @@ function buildPresetMap(scene, preset, rng) {
     const bigger = new THREE.InstancedMesh(
       m.steelsMesh.geometry,
       m.steelsMesh.material,
-      needSteel,
+      needSteel + 6,
     );
-    bigger.copy(m.steelsMesh);
+    bigger.castShadow = bigger.receiveShadow = true;
     m.root.remove(m.steelsMesh);
     m.steelsMesh.dispose?.();
     m.steelsMesh = bigger;

@@ -25,6 +25,7 @@ export class Effects {
     this.points.frustumCulled = false;
     scene.add(this.points);
     this.wrecks = [];
+    this.pulses = [];
     this.shakeState = { mag: 0, duration: 0, time: 0, ox: 0, oz: 0 };
     this.slowMoState = { remaining: 0, scale: 1 };
   }
@@ -62,6 +63,7 @@ export class Effects {
     });
   }
   explode(x, z) {
+    this.pulse(x, z, 0xff926b, 1.7, 0.35, 4);
     this.burst(x, 0.6, z, 0xf3b55c, 38, 1.2);
     this.burst(x, 0.6, z, 0x685b43, 20, 1.5);
     const mesh = new THREE.Mesh(
@@ -73,6 +75,31 @@ export class Effects {
     mesh.receiveShadow = true;
     this.scene.add(mesh);
     this.wrecks.push({ mesh, x, z, life: 10, smoke: 0 });
+  }
+  pulse(x, z, color, radius, duration, segments = 48) {
+    if (this.pulses.length >= 12) this.disposePulse(this.pulses.shift());
+    const mesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.94, 1, segments),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      }),
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.065, z);
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    mesh.scale.setScalar(reduced ? radius : 0.1);
+    this.scene.add(mesh);
+    this.pulses.push({ mesh, radius, duration, life: duration, reduced });
+  }
+  disposePulse(pulse) {
+    pulse.mesh.removeFromParent();
+    pulse.mesh.geometry.dispose();
+    pulse.mesh.material.dispose();
   }
   shake(durationMs, magnitude) {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -130,6 +157,18 @@ export class Effects {
     this.slowMoState.scale = 1;
   }
   tick(dt) {
+    this.pulses = this.pulses.filter((pulse) => {
+      pulse.life -= dt;
+      if (pulse.life <= 0) {
+        this.disposePulse(pulse);
+        return false;
+      }
+      const t = 1 - pulse.life / pulse.duration;
+      if (!pulse.reduced)
+        pulse.mesh.scale.setScalar(pulse.radius * (1 - (1 - t) ** 3));
+      pulse.mesh.material.opacity = 0.85 * (1 - t);
+      return true;
+    });
     this.particles = this.particles.filter((p) => {
       p.life -= dt;
       if (p.life <= 0) return false;
@@ -189,6 +228,8 @@ export class Effects {
     }
   }
   clear() {
+    for (const pulse of this.pulses) this.disposePulse(pulse);
+    this.pulses = [];
     this.particles = [];
     this.geo.setDrawRange(0, 0);
     for (const w of this.wrecks) {

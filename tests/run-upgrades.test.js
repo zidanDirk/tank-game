@@ -40,8 +40,9 @@ function gameWithUpgrades(entries = []) {
   };
 }
 
-test("run upgrade catalog exposes six bounded build choices", () => {
-  assert.equal(Object.keys(RUN_UPGRADES).length, 6);
+test("run upgrade catalog exposes six standard choices and an endless weapon module", () => {
+  assert.equal(Object.keys(RUN_UPGRADES).length, 7);
+  assert.equal(RUN_UPGRADES.ricochet.mode, "endless");
   for (const upgrade of Object.values(RUN_UPGRADES)) {
     assert.ok(upgrade.label);
     assert.ok(upgrade.description);
@@ -241,10 +242,7 @@ test("computeEffectiveScaling returns the veteran baseline unchanged", () => {
   const base = computeEffectiveScaling("veteran", 1);
   assert.equal(base.fireMul, ENDLESS.fireMultiplierBase);
   assert.equal(base.speedMul, 1);
-  assert.equal(
-    base.lives,
-    ENDLESS.livesStart + Math.floor((1 - 1) / 3),
-  );
+  assert.equal(base.lives, ENDLESS.livesStart + Math.floor((1 - 1) / 3));
 });
 
 test("computeEffectiveScaling shrinks enemy fire rate for harder tiers", () => {
@@ -281,7 +279,11 @@ test("applyDifficultyToLevelConfig multiplies enemySpeedMul into levelConfig", (
 
 test("applyDifficultyToLevelConfig keeps the original baseline on the __base handle", () => {
   const g = { difficulty: "veteran" };
-  const cfg = { speedMultiplier: 1.18, fireMultiplier: 0.78, spawnInterval: 3.1 };
+  const cfg = {
+    speedMultiplier: 1.18,
+    fireMultiplier: 0.78,
+    spawnInterval: 3.1,
+  };
   GameManager.prototype.applyDifficultyToLevelConfig.call(g, cfg);
   assert.deepEqual(cfg.__base, {
     speedMultiplier: 1.18,
@@ -304,14 +306,16 @@ test("tuningForWave respects the selected difficulty multiplier", () => {
     buildEndlessSequence() {
       return ["light", "rapid"];
     },
-    applyDifficultyToLevelConfig: GameManager.prototype.applyDifficultyToLevelConfig,
+    applyDifficultyToLevelConfig:
+      GameManager.prototype.applyDifficultyToLevelConfig,
   };
   GameManager.prototype.tuningForWave.call(g, 3);
   const tier = DIFFICULTY_BY_ID["iron-hand"];
   const fireMul =
-    ENDLESS.fireMultiplierBase /
-    (1 + ENDLESS.fireMultiplierDecay * 2);
-  assert.ok(Math.abs(g.levelConfig.fireMultiplier - fireMul * tier.enemyFireMul) < 1e-9);
+    ENDLESS.fireMultiplierBase / (1 + ENDLESS.fireMultiplierDecay * 2);
+  assert.ok(
+    Math.abs(g.levelConfig.fireMultiplier - fireMul * tier.enemyFireMul) < 1e-9,
+  );
   assert.equal(
     g.levelConfig.speedMultiplier,
     (1 + ENDLESS.speedGrowth * 2) * tier.enemySpeedMul,
@@ -376,8 +380,7 @@ test("snapshot exposes difficulty, threatBadge, briefingTone and effective multi
   assert.ok(["calm", "hot", "intense"].includes(snap.threatBadge));
   assert.equal(
     snap.effectiveSpeedMul,
-    (1 + ENDLESS.speedGrowth * 5) *
-      DIFFICULTY_BY_ID["iron-hand"].enemySpeedMul,
+    (1 + ENDLESS.speedGrowth * 5) * DIFFICULTY_BY_ID["iron-hand"].enemySpeedMul,
   );
 });
 
@@ -408,7 +411,10 @@ test("setDifficulty persists the choice but defers activation until the next res
     audio: { play: () => {} },
     syncDifficultyButtons: GameManager.prototype.syncDifficultyButtons,
   };
-  assert.equal(GameManager.prototype.setDifficulty.call(g, "iron-curtain"), true);
+  assert.equal(
+    GameManager.prototype.setDifficulty.call(g, "iron-curtain"),
+    true,
+  );
   assert.equal(g.difficulty, "iron-curtain");
   assert.ok(pressedStates.includes("false"));
 });
@@ -461,7 +467,7 @@ test("presentThreatBriefing marks the aria-live node assertive for boss + last l
     _lastBriefingAt: -Infinity,
     _briefingTimer: null,
     _showThreatBanner() {},
-      _announceBriefing: GameManager.prototype._announceBriefing,
+    _announceBriefing: GameManager.prototype._announceBriefing,
   };
   GameManager.prototype.presentThreatBriefing.call(g, {
     tone: "assertive",
@@ -517,9 +523,12 @@ test("presentThreatBriefing throttles aria-live updates so rapid waves do not sp
     _lastBriefingAt: -Infinity,
     _briefingTimer: null,
     _showThreatBanner() {},
-      _announceBriefing: GameManager.prototype._announceBriefing,
+    _announceBriefing: GameManager.prototype._announceBriefing,
   };
-  GameManager.prototype.presentThreatBriefing.call(g, { tone: "polite", wave: 2 });
+  GameManager.prototype.presentThreatBriefing.call(g, {
+    tone: "polite",
+    wave: 2,
+  });
   const assertiveCount = ariaUpdates.filter((v) => v === "assertive").length;
   assert.equal(assertiveCount, 0);
   assert.equal(g._briefingTone, "polite");

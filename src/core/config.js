@@ -8,10 +8,10 @@ export const DIRS = [
 ];
 export const CELL = { EMPTY: 0, BRICK: 1, STEEL: 2, WATER: 3, BASE: 4 };
 export const TYPES = {
-  player: { color: 0x749941, speed: 4.1, hp: 1, cooldown: 0.3, score: 0 },
-  light: { color: 0xb65c48, speed: 2.9, hp: 1, cooldown: 2, score: 100 },
-  heavy: { color: 0x66637d, speed: 1.45, hp: 3, cooldown: 2.5, score: 300 },
-  rapid: { color: 0x995474, speed: 2.2, hp: 1, cooldown: 0.95, score: 200 },
+  player: { color: 0x338e9d, speed: 4.1, hp: 1, cooldown: 0.3, score: 0 },
+  light: { color: 0xb05246, speed: 2.9, hp: 1, cooldown: 2, score: 100 },
+  heavy: { color: 0x76648c, speed: 1.45, hp: 3, cooldown: 2.5, score: 300 },
+  rapid: { color: 0xa35b8f, speed: 2.2, hp: 1, cooldown: 0.95, score: 200 },
   armor: {
     color: 0x8a6a5a,
     speed: 1.6,
@@ -101,6 +101,14 @@ export const RUN_UPGRADES = {
     label: "反应装甲",
     description: "每次出生抵挡 1 次伤害",
     maxStacks: 2,
+  },
+  ricochet: {
+    id: "ricochet",
+    icon: "↯",
+    label: "跳弹模块",
+    description: "炮弹遇钢墙反弹一次；满级破墙优先，反弹仍可伤及基地",
+    maxStacks: 1,
+    mode: "endless",
   },
 };
 export const RUN_UPGRADE_KEYS = Object.keys(RUN_UPGRADES);
@@ -469,18 +477,15 @@ export function computeEffectiveScaling(difficulty, wave = 1, base = ENDLESS) {
   const tier = difficultyFor(difficulty);
   const w = Math.max(1, Math.floor(wave));
   const fireMul =
-    (base.fireMultiplierBase /
-      (1 + base.fireMultiplierDecay * (w - 1))) * tier.enemyFireMul;
+    (base.fireMultiplierBase / (1 + base.fireMultiplierDecay * (w - 1))) *
+    tier.enemyFireMul;
   const speedMul = (1 + base.speedGrowth * (w - 1)) * tier.enemySpeedMul;
-  const spawnInterval = Math.max(
-    base.spawnIntervalMin,
-    base.spawnIntervalBase - (w - 1) * 0.18,
-  ) * tier.spawnIntervalMul;
+  const spawnInterval =
+    Math.max(base.spawnIntervalMin, base.spawnIntervalBase - (w - 1) * 0.18) *
+    tier.spawnIntervalMul;
   const lives = Math.max(
     1,
-    Math.round(
-      (base.livesStart + Math.floor((w - 1) / 3)) * tier.livesMul,
-    ),
+    Math.round((base.livesStart + Math.floor((w - 1) / 3)) * tier.livesMul),
   );
   const dropChance = Math.min(
     0.75,

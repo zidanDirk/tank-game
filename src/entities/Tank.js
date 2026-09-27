@@ -17,6 +17,11 @@ export class Tank {
     this.radius = 0.46;
     this.alive = true;
     this.direction = type === "player" ? 0 : 2;
+    this.visualYaw = (-this.direction * Math.PI) / 2;
+    this.visualSpeed = 0;
+    this.lastVisualX = x;
+    this.lastVisualZ = z;
+    this.pitch = 0;
     this.aim = (this.direction * Math.PI) / 2;
     this.cooldownLeft = 0;
     this.invincible = type === "player" ? 3 : 1;
@@ -83,12 +88,14 @@ export class Tank {
     if (this.shieldLeft > 0) {
       this.shieldLeft = 0;
       this.game.effects.burst(this.x, 0.8, this.z, 0xb4d8ff, 14);
+      this.game.effects.pulse?.(this.x, this.z, 0x56eee4, 1.1, 0.3);
       this.game.audio.play("shield");
       return;
     }
     if (this.team === "player" && this.armorCharges > 0) {
       this.armorCharges--;
       this.game.effects.burst(this.x, 0.8, this.z, 0x9bbf5a, 18, 0.8);
+      this.game.effects.pulse?.(this.x, this.z, 0x56eee4, 1.1, 0.3);
       this.game.audio.play("shield");
       this.game.syncRunUpgradeHud?.();
       return;
@@ -144,11 +151,31 @@ export class Tank {
         this.game.effects.smoke(this.x, this.z);
       }
     }
+    const yaw = (-this.direction * Math.PI) / 2;
+    const turn = Math.atan2(
+      Math.sin(yaw - this.visualYaw),
+      Math.cos(yaw - this.visualYaw),
+    );
+    const speed =
+      Math.hypot(this.x - this.lastVisualX, this.z - this.lastVisualZ) /
+      Math.max(dt, 0.001);
+    const reduced = this.game.reducedMotion;
+    this.visualYaw = reduced
+      ? yaw
+      : this.visualYaw + turn * (1 - Math.exp(-dt * 22));
+    this.pitch = reduced
+      ? 0
+      : this.pitch * Math.exp(-dt * 12) + (speed - this.visualSpeed) * 0.012;
+    this.pitch = Math.max(-0.07, Math.min(0.07, this.pitch));
+    this.visualSpeed = speed;
+    this.lastVisualX = this.x;
+    this.lastVisualZ = this.z;
     this.sync();
   }
   sync() {
     this.model.root.position.set(this.x, 0, this.z);
-    this.model.hull.rotation.y = (-this.direction * Math.PI) / 2;
+    this.model.hull.rotation.y = this.visualYaw;
+    this.model.hull.rotation.x = this.pitch;
     this.model.turret.rotation.y = -this.aim;
   }
   dispose() {
@@ -173,6 +200,7 @@ export class PlayerTank extends Tank {
     this.breakSteel = cfg.breakSteel;
     this.bulletSpeedMultiplier = 1 + stacks("velocity") * 0.15;
     this.damage = 1 + stacks("piercing");
+    this.ricochets = this.game.mode === "endless" ? stacks("ricochet") : 0;
   }
   upgrade() {
     if (this.level >= PLAYER_MAX_LEVEL) return false;

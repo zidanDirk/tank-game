@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#f2f1e7" />
+    <meta name="theme-color" content="#0b1523" />
     <meta
       name="description"
       content="Tank 1990 — 一场关于勇气与守护的经典坦克战役。Three.js 3D 俯视角坦克大战。"
@@ -29,7 +29,7 @@
           >
         </a>
         <div class="header-designation">
-          <span>CLASSIC REIMAGINED</span><span>经典战役 · 立体重现</span>
+          <span>NEON DEFENSE DIVISION</span><span>霓虹防线 · 核心守卫</span>
         </div>
         <div class="header-actions">
           <span class="system-online"><i></i> SYSTEM ONLINE</span>
@@ -68,8 +68,8 @@
       <main>
         <div class="page-heading">
           <div class="eyebrow">
-            <span class="orange-square"></span> FIELD OPERATIONS
-            <span class="heading-divider">/</span> 防御作战
+            <span class="orange-square"></span> NEON OPERATIONS
+            <span class="heading-divider">/</span> 能源核心防御
           </div>
           <span class="edition">EST. 1990 <span>—</span> REBUILT IN 3D</span>
         </div>
@@ -78,7 +78,7 @@
             <div class="operation-bar">
               <div class="operation-name">
                 <span class="operation-cross">✳</span><strong>前线阵地</strong
-                ><span>THE BATTLEFIELD</span>
+                ><span>INDUSTRIAL SECTOR</span>
               </div>
               <div class="operation-status">
                 <span class="live-dot"></span><span id="status-label">待命</span
@@ -142,9 +142,7 @@
               ></div>
               <div id="overlay" class="game-overlay" hidden>
                 <div id="overlay-panel" class="overlay-panel">
-                  <span class="overlay-kicker"
-                    >TANK / 1990 — FIELD COMMAND</span
-                  >
+                  <span class="overlay-kicker">TANK / 1990 — NEON COMMAND</span>
                   <div class="overlay-insignia" aria-hidden="true">✳</div>
                   <div
                     id="mode-toggle"
@@ -199,6 +197,23 @@
                 </div>
               </div>
             </div>
+            <div class="combat-settings">
+              <label for="aim-mode"
+                >操控
+                <select id="aim-mode">
+                  <option value="independent">独立瞄准</option>
+                  <option value="classic">经典操作</option>
+                </select></label
+              >
+              <span class="aim-help">独立瞄准：移动不改变炮塔方向</span>
+              <label for="visual-quality"
+                >画质
+                <select id="visual-quality">
+                  <option value="high">霓虹辉光</option>
+                  <option value="low">流畅</option>
+                </select></label
+              >
+            </div>
             <div class="keyboard-strip">
               <div>
                 <span class="key-group"
@@ -227,15 +242,35 @@
                 ><button data-control="down" aria-label="向下">↓</button
                 ><button data-control="right" aria-label="向右">→</button>
               </div>
-              <span class="touch-caption"
-                >守住阵地<br /><small>HOLD THE LINE</small></span
-              ><button data-control="fire" class="touch-fire" aria-label="射击">
+              <button
+                id="touch-emp"
+                class="touch-emp"
+                type="button"
+                disabled
+                aria-label="释放电磁脉冲"
+              >
+                EMP · 无尽
+              </button>
+              <button data-control="fire" class="touch-fire" aria-label="射击">
                 <span>◎</span>射击
               </button>
             </div>
           </section>
 
           <aside class="mission-sidebar" aria-label="作战信息">
+            <button
+              id="emp-btn"
+              class="emp-button"
+              type="button"
+              disabled
+              title="Q / 点击释放电磁脉冲；Boss 干扰 0.45 秒，冷却 12 秒"
+            >
+              <kbd>Q</kbd
+              ><span
+                ><strong>电磁脉冲 / EMP</strong
+                ><small id="emp-status">无尽模式解锁 · 范围 4 格</small></span
+              >
+            </button>
             <section class="mission-intro">
               <div class="section-label">当前战役 <span>MISSION</span></div>
               <div class="stage-row">
@@ -294,15 +329,15 @@
               <div class="terrain-guide">
                 <div>
                   <i class="terrain-swatch brick"></i
-                  ><span>砖墙<small>可摧毁</small></span>
+                  ><span>工业模块<small>可摧毁</small></span>
                 </div>
                 <div>
                   <i class="terrain-swatch steel"></i
-                  ><span>钢墙<small>不可摧毁</small></span>
+                  ><span>装甲隔断<small>高阶炮弹可破坏</small></span>
                 </div>
                 <div>
                   <i class="terrain-swatch water"></i
-                  ><span>水域<small>无法通行</small></span>
+                  ><span>冷却液池<small>无法通行</small></span>
                 </div>
               </div>
               <div class="enemy-guide">
@@ -320,7 +355,9 @@
             <div class="briefing">
               <span class="briefing-icon" aria-hidden="true">↳</span>
               <p>
-                善用掩体，留意基地。<br /><span>最好的进攻，是守住希望。</span>
+                橙色准星表示射线被阻挡。<br /><span
+                  >青色能源核心是最后的防线。</span
+                >
               </p>
             </div>
             <button id="restart-btn" class="restart-button">

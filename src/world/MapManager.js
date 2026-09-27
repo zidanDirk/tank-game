@@ -3,6 +3,7 @@ import { SIZE, CELL } from "../core/config.js";
 import {
   box,
   mat,
+  glow,
   merged,
   eagleModel,
   disposeGroup,
@@ -108,13 +109,13 @@ export class MapManager {
     const foundation = merged(
       this.root,
       [box(26.6, 0.7, 26.6, 13, -0.5, 13)],
-      mat(0x8d9682),
+      mat(0x18273c),
     );
     foundation.receiveShadow = true;
     const floor = merged(
       this.root,
       [box(25.8, 0.12, 25.8, 13, -0.08, 13)],
-      mat(0xbac0a2),
+      mat(0x263b50),
     );
     floor.castShadow = false;
     const gridLines = [];
@@ -130,7 +131,7 @@ export class MapManager {
       new THREE.LineSegments(
         gridGeo,
         new THREE.LineBasicMaterial({
-          color: 0x85917b,
+          color: 0x7395b9,
           transparent: true,
           opacity: 0.24,
         }),
@@ -148,8 +149,8 @@ export class MapManager {
     const steelCount = this.cells.filter((t) => t === CELL.STEEL).length;
     this.steelsMesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.98, 0.95, 0.98),
-      mat(0x687e76, 0.65, 0.2),
-      Math.max(1, steelCount),
+      this.steelMaterial(),
+      Math.max(1, steelCount + 6),
     );
     this.steelsMesh.castShadow = true;
     this.steelsMesh.receiveShadow = true;
@@ -175,7 +176,7 @@ export class MapManager {
               this.bricks.setColorAt(
                 bi,
                 new THREE.Color().setHex(
-                  (x + z + row) % 3 === 0 ? 0xc88b60 : 0xae694b,
+                  (x + z + row) % 3 === 0 ? 0xa57158 : 0x775349,
                 ),
               );
               ids.push(bi++);
@@ -201,15 +202,15 @@ export class MapManager {
     this.steelsMesh.count = si;
     this.steelsMesh.instanceMatrix.needsUpdate = true;
     if (water.length) {
-      this.waterMesh = merged(this.root, water, mat(0x72aab0, 0.27, 0.22));
+      this.waterMesh = merged(this.root, water, mat(0x174d72, 0.27, 0.22));
       this.waterMesh.castShadow = false;
     }
-    if (ripples.length) merged(this.root, ripples, mat(0xb4d4ce));
+    if (ripples.length) merged(this.root, ripples, mat(0x56c8e4));
     this.eagle = eagleModel();
     this.eagle.position.set(13, 0, 23);
     this.root.add(this.eagle);
     const padMaterial = new THREE.MeshBasicMaterial({
-      color: 0xb85843,
+      color: 0xff714d,
       transparent: true,
       opacity: 0.6,
       side: THREE.DoubleSide,
@@ -233,7 +234,55 @@ export class MapManager {
           box(0.6, 0.015, 0.045, x, 0.025, z),
           box(0.045, 0.015, 0.6, x, 0.025, z),
         );
-    merged(this.root, corners, mat(0xe8e4cc));
+    merged(this.root, corners, glow(0x56eee4, 1.2));
+    this.buildIndustry();
+  }
+  steelMaterial() {
+    // A tiny generated texture keeps stripes attached to the instanced wall faces.
+    const data = new Uint8Array(4 * 16 * 4);
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 4; x++) {
+        const stripe = y === 12 || y === 13;
+        const i = (y * 4 + x) * 4;
+        data.set(stripe ? [85, 202, 223, 255] : [79, 107, 134, 255], i);
+      }
+    this.steelTexture = new THREE.DataTexture(data, 4, 16);
+    this.steelTexture.colorSpace = THREE.SRGBColorSpace;
+    this.steelTexture.needsUpdate = true;
+    return new THREE.MeshStandardMaterial({
+      map: this.steelTexture,
+      roughness: 0.48,
+      metalness: 0.4,
+    });
+  }
+  buildIndustry() {
+    const blocks = [],
+      vents = [],
+      lights = [],
+      pipes = [];
+    for (const x of [-0.7, 26.7]) {
+      for (const z of [5, 12, 19]) {
+        blocks.push(box(0.72, 1.1, 1.8, x, 0.2, z));
+        for (let i = 0; i < 5; i++)
+          vents.push(box(0.5, 0.035, 0.05, x, 0.77, z - 0.5 + i * 0.25));
+        lights.push(box(0.6, 0.025, 0.05, x, 0.8, z - 0.75));
+      }
+      pipes.push(box(0.13, 0.13, 23, x, -0.1, 13));
+    }
+    merged(this.root, blocks, mat(0x304459, 0.48, 0.55));
+    merged(this.root, vents, mat(0x101a27));
+    merged(this.root, pipes, mat(0x647c91, 0.4, 0.6));
+    merged(this.root, lights, glow(0x9d83fa, 1.5));
+    // Low perimeter signs leave the playable lanes and incoming shells visible.
+    merged(this.root, [box(4.4, 0.8, 0.24, 18, 0.3, -0.65)], mat(0x142239));
+    merged(
+      this.root,
+      [
+        box(3.7, 0.045, 0.03, 18, 0.55, -0.51),
+        box(1.6, 0.12, 0.03, 17, 0.3, -0.51),
+      ],
+      glow(0x9d83fa, 1.5),
+    );
   }
   destroyBrick(x, z) {
     if (this.get(x, z) !== CELL.BRICK) return false;
@@ -259,7 +308,33 @@ export class MapManager {
     this.eagle.rotation.z = 0.2;
     this.eagle.scale.y = 0.35;
   }
+  rebuildWater() {
+    if (this.waterMesh) {
+      this.waterMesh.removeFromParent();
+      this.waterMesh.geometry.dispose();
+      this.waterMesh.material.dispose();
+      this.waterMesh = null;
+    }
+    const tiles = [];
+    for (let z = 0; z < SIZE; z++)
+      for (let x = 0; x < SIZE; x++)
+        if (this.get(x, z) === CELL.WATER)
+          tiles.push(box(0.99, 0.035, 0.99, x + 0.5, 0.015, z + 0.5));
+    if (tiles.length) {
+      this.waterMesh = merged(this.root, tiles, mat(0x174d72, 0.27, 0.22));
+      this.waterMesh.castShadow = false;
+    }
+  }
+  reserveSpawnLanes() {
+    // Rotation/mirroring can otherwise bury the fixed spawn points in walls.
+    this.rectangle(1, 2, 24, 1, CELL.EMPTY);
+    for (const x of [2, 12, 23]) this.rectangle(x, 1, 1, 4, CELL.EMPTY);
+    for (const x of [9, 16]) this.rectangle(x, 3, 1, 22, CELL.EMPTY);
+    this.rectangle(6, 23, 5, 1, CELL.EMPTY);
+    this.rectangle(15, 23, 4, 1, CELL.EMPTY);
+  }
   rebuildInstances() {
+    this.rebuildWater();
     if (!this.bricks || !this.steelsMesh) return;
     this.brickInstances.clear();
     this.steelInstances.clear();
@@ -287,7 +362,7 @@ export class MapManager {
               this.bricks.setColorAt(
                 bi,
                 new THREE.Color().setHex(
-                  (x + z + row) % 3 === 0 ? 0xc88b60 : 0xae694b,
+                  (x + z + row) % 3 === 0 ? 0xa57158 : 0x775349,
                 ),
               );
               ids.push(bi++);
@@ -360,14 +435,19 @@ export class MapManager {
     }
   }
   tick(time) {
+    if (this.base.alive && this.eagle.userData.core) {
+      this.eagle.userData.core.rotation.y = time * 0.45;
+      this.eagle.userData.core.position.y = 0.98 + Math.sin(time * 2) * 0.05;
+    }
     if (!this.waterMesh) return;
     this.waterMesh.material.color.setHSL(
-      0.49,
-      0.24,
-      0.53 + Math.sin(time * 1.4) * 0.015,
+      0.56,
+      0.6,
+      0.24 + Math.sin(time * 1.4) * 0.012,
     );
   }
   dispose() {
+    this.steelTexture?.dispose();
     const owned = new Set();
     this.root.traverse((o) => {
       if (o.material) owned.add(o.material);
