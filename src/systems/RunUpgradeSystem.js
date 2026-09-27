@@ -15,9 +15,11 @@ export class RunUpgradeSystem {
     this.choices = [];
   }
 
-  roll(rng, count = 3) {
+  roll(rng, count = 3, mode = "campaign") {
     const candidates = RUN_UPGRADE_KEYS.filter(
-      (id) => this.get(id) < RUN_UPGRADES[id].maxStacks,
+      (id) =>
+        this.get(id) < RUN_UPGRADES[id].maxStacks &&
+        (!RUN_UPGRADES[id].mode || RUN_UPGRADES[id].mode === mode),
     );
     for (let i = candidates.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));

@@ -1,4 +1,5 @@
 const FREQ = {
+  emp: 760,
   shoot: 180,
   hit: 90,
   brick: 130,
@@ -13,6 +14,7 @@ const FREQ = {
   shovel: 200,
 };
 const DUR = {
+  emp: 0.55,
   shoot: 0.1,
   hit: 0.1,
   brick: 0.1,
@@ -27,6 +29,7 @@ const DUR = {
   shovel: 0.22,
 };
 const WAVE = {
+  emp: "sine",
   shoot: "square",
   hit: "square",
   brick: "square",
@@ -44,6 +47,7 @@ const WAVE = {
 // vibrate (e.g. brick chips are too spammy). Patterns may be arrays for the
 // Vibration API's on/off pulse form.
 const VIBRATE = {
+  emp: [25, 30, 50],
   shoot: 8,
   hit: 45,
   brick: 0,

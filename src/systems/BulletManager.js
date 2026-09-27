@@ -9,12 +9,12 @@ export class BulletManager {
     this.items = [];
     this.geometry = new THREE.SphereGeometry(0.12, 6, 4);
     this.materials = {
-      player: new THREE.MeshBasicMaterial({ color: 0xffe6a0 }),
+      player: new THREE.MeshBasicMaterial({ color: 0x86fff1 }),
       enemy: new THREE.MeshBasicMaterial({ color: 0xff9470 }),
       boss: new THREE.MeshBasicMaterial({ color: 0xffb48a }),
     };
     this.trailMaterial = new THREE.LineBasicMaterial({
-      color: 0xffe6a0,
+      color: 0x86fff1,
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
@@ -41,6 +41,7 @@ export class BulletManager {
       alive: true,
       life: 3,
       breakSteel: tank.breakSteel === true,
+      ricochets: tank.ricochets ?? 0,
       damage: tank.damage ?? 1,
       mesh: new THREE.Mesh(
         this.geometry,
@@ -107,6 +108,25 @@ export class BulletManager {
     if (t >= 1) this.disposeTrail(b);
   }
   impact(b, hit) {
+    if (
+      hit.kind === "tile" &&
+      hit.type === CELL.STEEL &&
+      !b.breakSteel &&
+      b.ricochets > 0 &&
+      (hit.normal?.x || hit.normal?.z)
+    ) {
+      b.ricochets--;
+      if (hit.normal.x) b.vx *= -1;
+      if (hit.normal.z) b.vz *= -1;
+      b.x += hit.normal.x * 0.001;
+      b.z += hit.normal.z * 0.001;
+      this.disposeTrail(b);
+      this.attachTrail(b);
+      b.trailLife = 0;
+      this.game.effects.burst(b.x, 0.87, b.z, 0x9d83fa, 10, 0.3);
+      this.game.audio.play("shield");
+      return;
+    }
     b.alive = false;
     this.disposeTrail(b);
     if (hit.kind === "tank") hit.tank.hit(b.damage ?? 1);
@@ -134,64 +154,87 @@ export class BulletManager {
     const hit = this.game.collision.trace(b, dx, dz);
     b.x += dx * (hit ? hit.time : 1);
     b.z += dz * (hit ? hit.time : 1);
-    if (hit) this.impact(b, hit);
+    if (hit) {
+      this.impact(b, hit);
+      if (b.alive) {
+        const remaining =
+          (Math.hypot(dx, dz) * (1 - hit.time)) / Math.hypot(b.vx, b.vz);
+        this.advance(b, b.vx * remaining, b.vz * remaining);
+      }
+    }
     b.mesh.position.set(b.x, 0.87, b.z);
   }
   tick(dt) {
-    const contacts = [];
-    const terrain = new Map();
-    for (const b of this.items)
-      if (b.alive)
-        terrain.set(b, this.game.collision.trace(b, b.vx * dt, b.vz * dt));
-    for (let i = 0; i < this.items.length; i++)
-      for (let j = i + 1; j < this.items.length; j++) {
-        const a = this.items[i],
-          b = this.items[j];
-        if (!a.alive || !b.alive) continue;
-        const t = segmentBox(
-          a.x - b.x,
-          a.z - b.z,
-          (a.vx - b.vx) * dt,
-          (a.vz - b.vz) * dt,
-          -0.22,
-          -0.22,
-          0.22,
-          0.22,
+    // Resolve events in time order, re-sweeping after a reflection. This also
+    // catches bullet/bullet contacts on the reflected part of the same step.
+    const map = this.game.map;
+    for (const b of this.items) {
+      b.life -= dt;
+      if (b.life <= 0) b.alive = false;
+    }
+    let remaining = dt;
+    for (let events = 0; remaining > 1e-8 && events < 128; events++) {
+      const live = this.items.filter((b) => b.alive);
+      let first = null;
+      for (const b of live) {
+        const hit = this.game.collision.trace(
+          b,
+          b.vx * remaining,
+          b.vz * remaining,
         );
-        if (
-          t !== null &&
-          t < (terrain.get(a)?.time ?? Infinity) &&
-          t < (terrain.get(b)?.time ?? Infinity)
-        )
-          contacts.push({ a, b, t });
+        if (hit && (!first || hit.time < first.time))
+          first = { time: hit.time, a: b, hit };
       }
-    contacts.sort((a, b) => a.t - b.t);
-    for (const { a, b, t } of contacts)
-      if (a.alive && b.alive) {
-        a.alive = b.alive = false;
-        this.game.effects.burst(
-          a.x + a.vx * dt * t,
-          0.87,
-          a.z + a.vz * dt * t,
-          0xffe8a6,
-          7,
-          0.4,
-        );
+      for (let i = 0; i < live.length; i++)
+        for (let j = i + 1; j < live.length; j++) {
+          const a = live[i],
+            b = live[j];
+          const t = segmentBox(
+            a.x - b.x,
+            a.z - b.z,
+            (a.vx - b.vx) * remaining,
+            (a.vz - b.vz) * remaining,
+            -0.22,
+            -0.22,
+            0.22,
+            0.22,
+          );
+          if (t !== null && (!first || t < first.time))
+            first = { time: t, a, b };
+        }
+      const elapsed = remaining * (first?.time ?? 1);
+      for (const b of live) {
+        b.x += b.vx * elapsed;
+        b.z += b.vz * elapsed;
+        b.mesh.position.set(b.x, 0.87, b.z);
       }
-    for (const b of this.items)
-      if (b.alive) {
-        b.life -= dt;
-        if (b.life <= 0) b.alive = false;
-        else this.advance(b, b.vx * dt, b.vz * dt);
-        if (b.alive && b.team === "player") this.updateTrail(b, dt);
-        if (this.game.state !== "playing") break;
-      }
+      remaining -= elapsed;
+      if (!first) break;
+      if (first.b) {
+        first.a.alive = first.b.alive = false;
+        this.game.effects.burst(first.a.x, 0.87, first.a.z, 0xffe8a6, 7, 0.4);
+      } else this.impact(first.a, first.hit);
+      if (this.game.state !== "playing" || this.game.map !== map) break;
+    }
     this.items = this.items.filter((b) => {
       if (!b.alive) {
         b.mesh.removeFromParent();
         this.disposeTrail(b);
+      } else {
+        b.mesh.position.set(b.x, 0.87, b.z);
+        if (b.team === "player") this.updateTrail(b, dt);
       }
       return b.alive;
+    });
+  }
+  clearHostileInRadius(x, z, radius) {
+    this.items = this.items.filter((b) => {
+      if (b.team === "player" || Math.hypot(b.x - x, b.z - z) > radius)
+        return true;
+      b.alive = false;
+      b.mesh.removeFromParent();
+      this.disposeTrail(b);
+      return false;
     });
   }
   clear() {

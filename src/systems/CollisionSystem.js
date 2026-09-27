@@ -58,11 +58,29 @@ export class CollisionSystem {
       ) {
         const type = this.map.get(x, z);
         if (type === CELL.EMPTY || type === CELL.WATER) continue;
-        take(segmentBox(b.x, b.z, dx, dz, x - r, z - r, x + 1 + r, z + 1 + r), {
+        const time = segmentBox(
+          b.x,
+          b.z,
+          dx,
+          dz,
+          x - r,
+          z - r,
+          x + 1 + r,
+          z + 1 + r,
+        );
+        const hx = b.x + dx * (time ?? 0),
+          hz = b.z + dz * (time ?? 0);
+        const normal = { x: 0, z: 0 };
+        if (dx > 0 && Math.abs(hx - (x - r)) < 1e-7) normal.x = -1;
+        if (dx < 0 && Math.abs(hx - (x + 1 + r)) < 1e-7) normal.x = 1;
+        if (dz > 0 && Math.abs(hz - (z - r)) < 1e-7) normal.z = -1;
+        if (dz < 0 && Math.abs(hz - (z + 1 + r)) < 1e-7) normal.z = 1;
+        take(time, {
           kind: "tile",
           type,
           x,
           z,
+          normal,
         });
       }
     for (const tank of this.getTanks())

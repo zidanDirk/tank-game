@@ -62,6 +62,9 @@ async function destroyArrangedEnemy() {
 }
 
 try {
+  await page.addInitScript(() =>
+    localStorage.setItem("tank-visual-quality", "low"),
+  );
   await page.goto("http://127.0.0.1:5173/");
   await page.waitForFunction(() => window.__TANK_GAME__);
   await page.locator("#primary-btn").click();

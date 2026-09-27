@@ -8,6 +8,9 @@ try {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });
+  await page.addInitScript(() =>
+    localStorage.setItem("tank-visual-quality", "low"),
+  );
   await page.goto("http://127.0.0.1:5173/");
   await page.locator("#primary-btn").click();
 

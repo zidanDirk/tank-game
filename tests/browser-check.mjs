@@ -19,6 +19,9 @@ page.on("response", (r) => {
     badResponses.push({ status: r.status(), url: r.url() });
 });
 try {
+  await page.addInitScript(() =>
+    localStorage.setItem("tank-visual-quality", "low"),
+  );
   await page.goto("http://127.0.0.1:5173");
   await page.waitForFunction(() => window.__TANK_GAME__);
   await page.screenshot({
@@ -154,6 +157,13 @@ try {
   const memories = [];
   for (let i = 0; i < 4; i++) {
     await page.locator("#restart-btn").click();
+    // Compare the same idle scene, excluding transient trails and explosions.
+    await page.evaluate(() => {
+      const g = window.__TANK_GAME__;
+      g.bullets.clear();
+      g.effects.clear();
+      g.togglePause();
+    });
     await page.evaluate(
       () =>
         new Promise((resolve) =>
@@ -168,6 +178,7 @@ try {
   }
   console.log("Restart geometries", memories);
   assert.ok(Math.max(...memories) - Math.min(...memories) <= 2);
+  await page.evaluate(() => window.__TANK_GAME__.togglePause());
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(200);
   const cdp = await page.context().newCDPSession(page);
@@ -210,7 +221,7 @@ try {
   }));
   assert.equal(audio.muted, false);
   assert.equal(audio.state, "running");
-  await page.goto("http://127.0.0.1:4173");
+  await page.goto(process.env.TANK_PREVIEW_URL || "http://127.0.0.1:4173");
   await page.locator("#primary-btn").click();
   await page.keyboard.down("KeyW");
   await page.keyboard.down("Space");

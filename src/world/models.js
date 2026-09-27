@@ -3,12 +3,22 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 export const mat = (color, roughness = 0.75, metalness = 0.05) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
+export const glow = (color, intensity = 2) =>
+  new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: intensity,
+    roughness: 0.4,
+    metalness: 0.25,
+  });
 export const materials = {
-  rubber: mat(0x29352d),
-  trim: mat(0xd9d4b4),
-  dark: mat(0x3c4a3d),
+  rubber: mat(0x101a27),
+  trim: mat(0x9fb4c9, 0.42, 0.45),
+  dark: mat(0x22334a, 0.45, 0.45),
   gold: mat(0xe8b958, 0.45, 0.3),
-  steel: mat(0x687e76, 0.65, 0.2),
+  steel: mat(0x536e89, 0.4, 0.5),
+  playerGlow: glow(0x56eee4),
+  enemyGlow: glow(0xff714d),
 };
 export function box(w, h, d, x = 0, y = 0, z = 0) {
   return new THREE.BoxGeometry(w, h, d).translate(x, y, z);
@@ -63,6 +73,15 @@ export function tankModel(color, type) {
       box(0.15, 0.29, 1.02, 0.64, 0.5, 0),
     );
   merged(hull, armor, paint);
+  const lights = type === "player" ? materials.playerGlow : materials.enemyGlow;
+  merged(
+    hull,
+    [
+      box(0.045, 0.05, 0.78, -0.38, 0.65, 0),
+      box(0.045, 0.05, 0.78, 0.38, 0.65, 0),
+    ],
+    lights,
+  );
   merged(
     hull,
     [
@@ -89,6 +108,9 @@ export function tankModel(color, type) {
   ];
   if (type === "rapid") detail.push(box(0.08, 0.08, 0.5, 0.21, 0.88, -0.52));
   merged(turret, detail, materials.dark);
+  const muzzle = new THREE.TorusGeometry(0.1, 0.022, 6, 12);
+  muzzle.translate(0, 0.87, -0.965);
+  merged(turret, [muzzle], lights);
   merged(
     turret,
     [
@@ -100,7 +122,7 @@ export function tankModel(color, type) {
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.77, 0.81, 40),
     new THREE.MeshBasicMaterial({
-      color: type === "player" ? 0x9eaf5b : color,
+      color: type === "player" ? 0x56eee4 : 0xff714d,
       transparent: true,
       opacity: 0.7,
       side: THREE.DoubleSide,
@@ -297,33 +319,24 @@ export function eagleModel() {
     [box(1.55, 0.22, 1.55, 0, 0.12, 0), box(1.25, 0.18, 1.25, 0, 0.3, 0)],
     materials.dark,
   );
-  const shape = new THREE.Shape();
-  shape.moveTo(0, 0.28);
-  shape.lineTo(0.16, 0.09);
-  shape.lineTo(0.67, 0.35);
-  shape.lineTo(0.59, -0.03);
-  shape.lineTo(0.3, -0.23);
-  shape.lineTo(0.15, -0.18);
-  shape.lineTo(0.12, -0.49);
-  shape.lineTo(0, -0.37);
-  shape.lineTo(-0.12, -0.49);
-  shape.lineTo(-0.15, -0.18);
-  shape.lineTo(-0.3, -0.23);
-  shape.lineTo(-0.59, -0.03);
-  shape.lineTo(-0.67, 0.35);
-  shape.lineTo(-0.16, 0.09);
-  shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.16,
-    bevelEnabled: true,
-    bevelSegments: 1,
-    steps: 1,
-    bevelSize: 0.035,
-    bevelThickness: 0.035,
-  });
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(0, 0.5, 0);
-  merged(root, [geo, cylinder(0.13, 0.2, 0, 0.64, -0.3)], materials.gold);
+  const core = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.52),
+    materials.playerGlow,
+  );
+  core.position.y = 0.98;
+  root.add(core);
+  const rings = new THREE.Group();
+  for (const y of [0.46, 0.65]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.67, 0.025, 6, 40),
+      materials.playerGlow,
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = y;
+    rings.add(ring);
+  }
+  root.add(rings);
+  root.userData.core = core;
   return root;
 }
 export function disposeGroup(group) {
