@@ -4,7 +4,15 @@ import {
   PLAYER_LEVELS,
   PLAYER_MAX_LEVEL,
 } from "../core/config.js";
-import { tankModel, bossTankModel, disposeGroup } from "../world/models.js";
+import { AttackTelegraph } from "../world/AttackTelegraph.js";
+import {
+  tankModel,
+  bossTankModel,
+  disposeGroup,
+  merged,
+  box,
+  glow,
+} from "../world/models.js";
 
 export class Tank {
   constructor(game, type, x, z) {
@@ -73,17 +81,17 @@ export class Tank {
     if (multiShot === 1) {
       this.game.bullets.fire(this);
     } else if (multiShot === 2) {
-      this.game.bullets.fire(this, -0.06);
-      this.game.bullets.fire(this, 0.06);
-    } else if (multiShot === 3) {
       this.game.bullets.fire(this, -0.16);
-      this.game.bullets.fire(this, 0);
       this.game.bullets.fire(this, 0.16);
+    } else if (multiShot === 3) {
+      this.game.bullets.fire(this, -0.28);
+      this.game.bullets.fire(this, 0);
+      this.game.bullets.fire(this, 0.28);
     }
     this.model.turret.position.z = 0.09;
     if (this.team === "player") this.game.audio.play("shoot");
   }
-  hit(damage = 1) {
+  hit(damage = 1, source) {
     if (!this.alive || this.invincible > 0) return;
     if (this.shieldLeft > 0) {
       this.shieldLeft = 0;
@@ -100,7 +108,7 @@ export class Tank {
       this.game.syncRunUpgradeHud?.();
       return;
     }
-    this.hp -= Math.max(1, damage);
+    this.hp -= this.damageReceived(Math.max(1, damage), source);
     this.flash = 0.15;
     this.game.effects.burst(this.x, 0.8, this.z, 0xffdc80, 12);
     this.game.audio.play("hit");
@@ -112,11 +120,15 @@ export class Tank {
     }
     if (this.hp <= 0) {
       this.alive = false;
+      this.telegraph?.hide();
       this.model.root.visible = false;
       this.game.effects.explode(this.x, this.z);
       this.game.audio.play("explosion");
       this.game.onTankDestroyed(this);
     }
+  }
+  damageReceived(damage) {
+    return damage;
   }
   tick(dt) {
     this.cooldownLeft = Math.max(0, this.cooldownLeft - dt);
@@ -200,7 +212,12 @@ export class PlayerTank extends Tank {
     this.breakSteel = cfg.breakSteel;
     this.bulletSpeedMultiplier = 1 + stacks("velocity") * 0.15;
     this.damage = 1 + stacks("piercing");
-    this.ricochets = this.game.mode === "endless" ? stacks("ricochet") : 0;
+    this.ricochets =
+      this.game.mode === "endless"
+        ? stacks("ricochet")
+        : this.game.levelConfig?.abilities?.ricochet
+          ? 1
+          : 0;
   }
   upgrade() {
     if (this.level >= PLAYER_MAX_LEVEL) return false;
@@ -282,5 +299,190 @@ export class EnemyTank extends Tank {
     super.tick(dt);
   }
 }
-export class BossTank extends EnemyTank {}
-export class ArmorTank extends EnemyTank {}
+export class ArmorTank extends EnemyTank {
+  constructor(...args) {
+    super(...args);
+    this.armorMaterial = glow(0xffc56b, 1.5);
+    this.weakpointMaterial = glow(0xd987ff, 2);
+    merged(
+      this.model.hull,
+      [box(0.95, 0.3, 0.13, 0, 0.64, -0.63)],
+      this.armorMaterial,
+    );
+    merged(
+      this.model.hull,
+      [box(0.58, 0.2, 0.12, 0, 0.64, 0.6)],
+      this.weakpointMaterial,
+    );
+  }
+  damageReceived(damage, source) {
+    if (!source) return damage; // Bomb / area damage bypasses the front plate.
+    const forward = DIRS[this.direction];
+    const speed = Math.hypot(source.vx, source.vz);
+    const dot = speed
+      ? (source.vx * forward.x + source.vz * forward.z) / speed
+      : 0;
+    return dot < -Math.SQRT1_2 ? damage * 0.5 : damage;
+  }
+  dispose() {
+    super.dispose();
+    this.armorMaterial.dispose();
+    this.weakpointMaterial.dispose();
+  }
+}
+
+export class SniperTank extends EnemyTank {
+  constructor(...args) {
+    super(...args);
+    this.attackState = "patrol";
+    this.attackTimer = 2;
+    this.telegraph = new AttackTelegraph(this.game, 0xff65c7);
+  }
+  interruptAttack() {
+    this.attackState = "recover";
+    this.attackTimer = 1.4;
+    this.telegraph.hide();
+  }
+  tick(dt) {
+    if (this.game.time < this.frozenUntil) {
+      this.interruptAttack();
+      Tank.prototype.tick.call(this, dt);
+      return;
+    }
+    if (this.invincible <= 0) this.attackTimer -= dt;
+    if (this.attackState === "patrol") {
+      this.think -= dt;
+      if (
+        this.invincible <= 0 &&
+        (this.think <= 0 || !this.move(this.direction, dt))
+      )
+        this.chooseDirection();
+      this.aim = (this.direction * Math.PI) / 2;
+      if (this.attackTimer <= 0 && this.game.player.alive) {
+        this.aim = Math.atan2(
+          this.game.player.x - this.x,
+          -(this.game.player.z - this.z),
+        );
+        this.attackState = "windup";
+        this.attackTimer = 0.8;
+      }
+    } else if (this.attackState === "windup") {
+      this.telegraph.show(this, [this.aim]);
+      if (this.attackTimer <= 0) {
+        this.game.bullets.fire(this);
+        this.interruptAttack();
+      }
+    } else if (this.attackTimer <= 0) {
+      this.attackState = "patrol";
+      this.attackTimer = 2;
+    }
+    Tank.prototype.tick.call(this, dt);
+  }
+  dispose() {
+    this.telegraph.dispose();
+    super.dispose();
+  }
+}
+
+export class BossTank extends EnemyTank {
+  constructor(...args) {
+    super(...args);
+    this.hp = this.game.levelConfig?.bossHp ?? this.hp;
+    this.maxHp = this.hp;
+    this.phase = 1;
+    this.attackState = "patrol";
+    this.attackTimer = 2;
+    this.nextCharge = true;
+    this.telegraph = new AttackTelegraph(this.game, 0xffb85c);
+  }
+  interruptAttack() {
+    this.attackState = "recover";
+    this.attackTimer = 1.4;
+    this.telegraph.hide();
+  }
+  tick(dt) {
+    if (this.hp <= this.maxHp / 2) this.phase = 2;
+    if (this.game.time < this.frozenUntil) {
+      this.interruptAttack();
+      Tank.prototype.tick.call(this, dt);
+      return;
+    }
+    if (this.invincible <= 0) this.attackTimer -= dt;
+    if (this.attackState === "patrol") {
+      this.think -= dt;
+      if (
+        this.invincible <= 0 &&
+        (this.think <= 0 || !this.move(this.direction, dt))
+      )
+        this.chooseDirection();
+      this.aim = (this.direction * Math.PI) / 2;
+      if (this.attackTimer <= 0 && this.game.player.alive) {
+        const p = this.game.player;
+        this.aim = Math.atan2(p.x - this.x, -(p.z - this.z));
+        this.charging = this.phase === 2 && this.nextCharge;
+        if (this.phase === 2) this.nextCharge = !this.nextCharge;
+        if (this.charging) {
+          this.direction =
+            Math.abs(p.x - this.x) > Math.abs(p.z - this.z)
+              ? p.x > this.x
+                ? 1
+                : 3
+              : p.z > this.z
+                ? 2
+                : 0;
+          this.aim = (this.direction * Math.PI) / 2;
+        }
+        this.attackState = "windup";
+        this.attackTimer = this.charging ? 1 : 0.8;
+        this.fan =
+          this.phase === 2 ? [-0.7, -0.35, 0, 0.35, 0.7] : [-0.4, 0, 0.4];
+      }
+    } else if (this.attackState === "windup") {
+      this.telegraph.show(
+        this,
+        this.charging ? [this.aim] : this.fan.map((a) => this.aim + a),
+        this.charging ? 4.8 : 22,
+      );
+      if (this.attackTimer <= 0) {
+        this.telegraph.hide();
+        if (this.charging) {
+          this.attackState = "charge";
+          this.attackTimer = 0.8;
+        } else {
+          for (const offset of this.fan)
+            this.game.bullets.fire(this, 0, offset);
+          this.interruptAttack();
+        }
+      }
+    } else if (this.attackState === "charge") {
+      const d = DIRS[this.direction],
+        p = this.game.player;
+      const x = this.x + d.x * 6 * dt,
+        z = this.z + d.z * 6 * dt;
+      if (
+        p.alive &&
+        Math.abs(p.x - x) < p.radius + this.radius &&
+        Math.abs(p.z - z) < p.radius + this.radius
+      ) {
+        p.hit();
+        this.interruptAttack();
+      } else if (
+        this.attackTimer <= 0 ||
+        !this.game.collision.canMove(this, x, z)
+      )
+        this.interruptAttack();
+      else {
+        this.x = x;
+        this.z = z;
+      }
+    } else if (this.attackTimer <= 0) {
+      this.attackState = "patrol";
+      this.attackTimer = 1.6;
+    }
+    Tank.prototype.tick.call(this, dt);
+  }
+  dispose() {
+    this.telegraph.dispose();
+    super.dispose();
+  }
+}

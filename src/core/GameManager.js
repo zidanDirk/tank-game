@@ -20,6 +20,8 @@ import {
   difficultyFor,
   computeEffectiveScaling,
 } from "./config.js";
+import { CampaignProgress } from "../systems/CampaignProgress.js";
+import { CombatView, fitArena } from "../ui/CombatView.js";
 import { Input } from "./Input.js";
 import { MapManager } from "../world/MapManager.js";
 import { NeonRenderer } from "../world/NeonRenderer.js";
@@ -28,6 +30,7 @@ import {
   EnemyTank,
   BossTank,
   ArmorTank,
+  SniperTank,
 } from "../entities/Tank.js";
 import { Pickup } from "../entities/Pickup.js";
 import { CollisionSystem } from "../systems/CollisionSystem.js";
@@ -48,6 +51,7 @@ export class GameManager {
     this.mode = "campaign";
     this.levelIndex = 0;
     this.levelConfig = LEVELS[0];
+    this.campaignProgress = new CampaignProgress();
     this.levelScoreStart = 0;
     this.rng = seededRandom();
     this.time = 0;
@@ -251,6 +255,7 @@ export class GameManager {
       this.ui["mode-campaign"].setAttribute("aria-pressed", "true");
       this.ui["mode-endless"].setAttribute("aria-pressed", "false");
       this.updateUI();
+      this.setOverlay("ready");
     });
     this.ui["mode-endless"].addEventListener("click", () => {
       if (this.state !== "ready") return;
@@ -258,6 +263,7 @@ export class GameManager {
       this.ui["mode-campaign"].setAttribute("aria-pressed", "false");
       this.ui["mode-endless"].setAttribute("aria-pressed", "true");
       this.updateUI();
+      if (this.state === "ready") this.setOverlay("ready");
     });
     this.renderDifficultyTier();
     this._difficultyButtons = this.ui["difficulty-tier"]
@@ -267,6 +273,7 @@ export class GameManager {
     this.ui["restart-btn"].addEventListener("click", () => {
       this.audio.unlock();
       this.restart();
+      this.container.focus({ preventScroll: true });
     });
     this.ui["sound-btn"].addEventListener("click", () => {
       this.audio.unlock();
@@ -288,6 +295,7 @@ export class GameManager {
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this._onVisibilityChange);
     }
+    this.combatView = new CombatView(this);
     this.reset();
     this.setOverlay("ready");
     this.resize();
@@ -344,6 +352,7 @@ export class GameManager {
     }
     this.difficulty = tier.id;
     this.syncDifficultyButtons();
+    this.combatView?.renderCampaign();
     if (this.audio?.play) this.audio.play("pickup-spawn");
     return true;
   }
@@ -383,10 +392,8 @@ export class GameManager {
       this.mode === "endless"
         ? computeEffectiveScaling(this.difficulty, wave)
         : {
-            fireMul:
-              (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
-            speedMul:
-              (this.levelConfig?.speedMultiplier ?? 1) * tier.enemySpeedMul,
+            fireMul: this.levelConfig?.fireMultiplier ?? 1,
+            speedMul: this.levelConfig?.speedMultiplier ?? 1,
           };
     const stage = this.mode === "endless" ? `第 ${wave} 波` : `第 ${wave} 关`;
     const headline = `${stage} · 速 ×${scaling.speedMul.toFixed(2)} · 射 ×${(
@@ -477,10 +484,8 @@ export class GameManager {
       this.mode === "endless" && this.wave > 0
         ? computeEffectiveScaling(this.difficulty, this.wave)
         : {
-            speedMul:
-              (this.levelConfig?.speedMultiplier ?? 1) * tier.enemySpeedMul,
-            fireMul:
-              (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
+            speedMul: this.levelConfig?.speedMultiplier ?? 1,
+            fireMul: this.levelConfig?.fireMultiplier ?? 1,
           };
     const ratio =
       (scaling.speedMul / Math.max(0.01, scaling.fireMul)) * tier.hazardMul;
@@ -499,10 +504,8 @@ export class GameManager {
       this.mode === "endless" && this.wave > 0
         ? computeEffectiveScaling(this.difficulty, this.wave)
         : {
-            speedMul:
-              (this.levelConfig?.speedMultiplier ?? 1) * tier.enemySpeedMul,
-            fireMul:
-              (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
+            speedMul: this.levelConfig?.speedMultiplier ?? 1,
+            fireMul: this.levelConfig?.fireMultiplier ?? 1,
           };
     const stage =
       this.mode === "endless"
@@ -583,7 +586,11 @@ export class GameManager {
     this.empCooldownLeft = 0;
     const nextLevel = Math.max(0, Math.min(levelIndex, LEVELS.length - 1));
     this.levelIndex = nextLevel;
-    this.levelConfig = LEVELS[nextLevel];
+    this.levelConfig = this.applyDifficultyToLevelConfig({
+      ...LEVELS[nextLevel],
+    });
+    this.stageDeaths = 0;
+    this.stageRecorded = false;
     this.input.clear();
     this.input.mouseAim = false;
     this.input.target = null;
@@ -699,6 +706,11 @@ export class GameManager {
   }
   spawnEnemy(gate) {
     if (this.spawned >= this.levelConfig.sequence.length) return false;
+    if (
+      this.levelConfig.sequence[this.spawned] === "boss" &&
+      this.enemies.some((e) => e.alive)
+    )
+      return false;
     const gates = [2.5, 12.5, 23.5];
     const order =
       gate === undefined
@@ -715,8 +727,20 @@ export class GameManager {
         continue;
       const type = this.levelConfig.sequence[this.spawned];
       const Class =
-        type === "boss" ? BossTank : type === "armor" ? ArmorTank : EnemyTank;
-      this.enemies.push(new Class(this, type, x, z));
+        type === "boss"
+          ? BossTank
+          : type === "armor"
+            ? ArmorTank
+            : type === "sniper"
+              ? SniperTank
+              : EnemyTank;
+      const enemy = new Class(this, type, x, z);
+      this.enemies.push(enemy);
+      if (type === "boss") {
+        this.boss = enemy;
+        this._bossJustSpawnedUntil = this.time + 1.5;
+        this.updateUI();
+      }
       this.spawned++;
       return true;
     }
@@ -739,8 +763,8 @@ export class GameManager {
   start() {
     if (this.state !== "ready") return;
     this.resetRunUpgrades();
-    // Refresh difficulty multipliers in case the player picked a different
-    // preset on the Ready screen since the constructor built the level.
+    this.levelScoreStart = 0;
+    this.reset(this.levelIndex, false);
     this.state = "playing";
     this.audio.play("start");
     this.setOverlay();
@@ -766,6 +790,10 @@ export class GameManager {
     });
   }
   restart() {
+    if (this.mode === "endless") {
+      this.retryEndless();
+      return;
+    }
     this.reset(this.levelIndex, true);
     this.state = "playing";
     this.setOverlay();
@@ -965,6 +993,7 @@ export class GameManager {
   }
   finish(won, reason) {
     if (this.state !== "playing") return;
+    if (won && this.mode === "campaign") this.recordCampaignStage();
     this.state = won ? "won" : "lost";
     this.input.clear();
     this.setOverlay(this.state, reason);
@@ -984,6 +1013,7 @@ export class GameManager {
     this.syncBriefingAriaState(this.state);
   }
   completeLevel() {
+    this.recordCampaignStage();
     this.state = "level-clear";
     this.input.clear();
     this.setOverlay(
@@ -991,6 +1021,51 @@ export class GameManager {
       `第 ${this.levelConfig.number} 关已清除。准备进入 ${this.levelIndex + 2} 关。`,
     );
     this.updateUI();
+  }
+  enemyTotal() {
+    return (
+      (this.levelConfig?.sequence.length ?? 12) +
+      (this.mode === "endless" &&
+      this.wave > 0 &&
+      this.wave % ENDLESS.bossEvery === 0
+        ? 1
+        : 0)
+    );
+  }
+  recordCampaignStage() {
+    if (this.stageRecorded || this.mode !== "campaign") return;
+    this.stageRecorded = true;
+    this.campaignProgress.record(
+      this.levelIndex + 1,
+      this.difficulty,
+      Math.max(0, this.score - this.levelScoreStart),
+      this.time,
+      this.stageDeaths,
+    );
+  }
+  returnToMenu() {
+    this.input.clear();
+    this.mode = "campaign";
+    this.state = "ready";
+    this.resetRunUpgrades();
+    this.levelScoreStart = 0;
+    this.reset(this.levelIndex, false);
+    this.setOverlay("ready");
+  }
+  selectCampaignLevel(index) {
+    if (
+      this.state !== "ready" ||
+      this.mode !== "campaign" ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= this.campaignProgress.unlocked
+    )
+      return false;
+    this.resetRunUpgrades();
+    this.levelScoreStart = 0;
+    this.reset(index, false);
+    this.setOverlay("ready");
+    return true;
   }
   advanceLevel() {
     if (this.levelIndex >= LEVELS.length - 1) return;
@@ -1003,7 +1078,7 @@ export class GameManager {
     this.presentThreatBriefing({
       tone: "polite",
       wave: this.levelConfig.number,
-      events: ["下一关"],
+      events: [this.levelConfig.briefing],
     });
   }
   newCampaign() {
@@ -1039,6 +1114,7 @@ export class GameManager {
   onTankDestroyed(tank) {
     if (tank.team === "player") {
       this.lives--;
+      this.stageDeaths = (this.stageDeaths ?? 0) + 1;
       this.effects.shake(350, 0.1);
       // A lost life breaks the streak — punish the player for taking a hit.
       this.killStreak = 0;
@@ -1097,18 +1173,22 @@ export class GameManager {
       } else {
         this.effects.shake(120, 0.04);
       }
-      const total = this.levelConfig?.sequence.length ?? 12;
-      if (this.kills >= total) {
-        if (this.mode === "endless") this.advanceEndlessWave();
-        else if (this.levelIndex < LEVELS.length - 1) this.completeLevel();
-        else
-          this.finish(true, "敌军已全部清除，基地安全。指挥官，阵地守住了。");
-      }
       if (
         this.levelConfig?.allowPowerups &&
         this.rng() < this.powerupChance()
       ) {
         this.dropPickup(tank.x, tank.z);
+      }
+      const total = GameManager.prototype.enemyTotal.call(this);
+      if (
+        this.kills >= total &&
+        !this.boss?.alive &&
+        this.levelConfig?.goal?.kind !== "survive"
+      ) {
+        if (this.mode === "endless") this.advanceEndlessWave();
+        else if (this.levelIndex < LEVELS.length - 1) this.completeLevel();
+        else
+          this.finish(true, "九关战役完成，能源核心安全。指挥官，阵地守住了。");
       }
     }
     this.updateUI();
@@ -1263,6 +1343,7 @@ export class GameManager {
   }
   setOverlay(state, reason) {
     this.ui.overlay.hidden = !state;
+    this.combatView?.renderCampaign(state);
     const selecting = state === "upgrade-select";
     this.ui.overlay.classList.toggle("choosing-upgrade", selecting);
     if (this.ui["upgrade-choices"])
@@ -1284,6 +1365,7 @@ export class GameManager {
         state !== "lost" || this.mode !== "endless";
     }
     if (!state) {
+      this.container?.focus?.({ preventScroll: true });
       this.syncBriefingAriaState(null);
       return;
     }
@@ -1291,7 +1373,7 @@ export class GameManager {
     const content = {
       ready: [
         "指挥官，准备出击",
-        `${this.mode === "endless" ? "无尽模式" : "战役模式"} · ${this.levelConfig.objective}`,
+        `${this.mode === "endless" ? "无尽模式" : "战役模式"} · ${this.mode === "endless" ? "守住基地，挑战不断升级的敌军。" : this.levelConfig.briefing}`,
         this.mode === "endless" ? "开始无尽 ↗" : "开始战役 ↗",
       ],
       paused: [
@@ -1301,7 +1383,7 @@ export class GameManager {
       ],
       "level-clear": [
         `第 ${this.levelConfig.number} 关完成`,
-        "战场补给已经抵达。选择一项改装，强化本次战役构筑。",
+        `下一关：${LEVELS[this.levelIndex + 1]?.name ?? "战役完成"}。${LEVELS[this.levelIndex + 1]?.briefing ?? ""}`,
         "选择战地改装 ↗",
       ],
       "upgrade-select": [
@@ -1311,7 +1393,11 @@ export class GameManager {
           : `第 ${this.levelConfig.number} 关完成 · 三选一永久强化本次战役。`,
         "",
       ],
-      won: ["阵地守住了", "", "再次出击 ↗"],
+      won: [
+        "阵地守住了",
+        reason || "九关战役完成。成绩与挑战勋章已记录，可返回选关挑战更高分。",
+        "再次出击 ↗",
+      ],
       lost: [
         "防线失守",
         reason || "重新部署。",
@@ -1325,6 +1411,15 @@ export class GameManager {
     const main = document.createElement("span");
     main.textContent = content[1];
     copyNode.appendChild(main);
+    if (
+      (state === "level-clear" || state === "won") &&
+      this.mode === "campaign"
+    ) {
+      const result = document.createElement("span");
+      result.className = "stage-result";
+      result.textContent = `本关 ${Math.max(0, this.score - this.levelScoreStart)} 分 · ${Math.ceil(this.time)} 秒${this.stageDeaths === 0 ? " · 无损勋章" : ""}${this.levelConfig.goal?.kind !== "survive" && this.time <= 150 ? " · 速攻勋章" : ""}`;
+      copyNode.appendChild(result);
+    }
     if (state === "lost") {
       const summary = document.createElement("span");
       summary.className = "difficulty-summary";
@@ -1334,7 +1429,8 @@ export class GameManager {
     this.ui["primary-btn"].textContent = content[2];
   }
   updateUI() {
-    const total = this.levelConfig.sequence.length;
+    const total = this.enemyTotal();
+    this.ui["restart-btn"].disabled = this.state === "ready";
     this.ui.score.textContent = String(this.score).padStart(6, "0");
     this.ui.kills.textContent = this.kills;
     this.ui.remaining.textContent = Math.max(0, total - this.kills);
@@ -1392,7 +1488,7 @@ export class GameManager {
       );
     }
     if (this.ui["boss-hp"]) {
-      const visible = this.boss && this.boss.alive && this.mode === "endless";
+      const visible = this.boss && this.boss.alive;
       this.ui["boss-hp"].hidden = !visible;
       if (visible) {
         const maxHp = this.boss.maxHp ?? TYPES.boss.hp;
@@ -1475,6 +1571,14 @@ export class GameManager {
       if (this.spawnEnemy()) this.spawnTimer = this.levelConfig.spawnInterval;
       else this.spawnTimer = 0.6;
     }
+    if (
+      this.levelConfig.goal?.kind === "survive" &&
+      this.time >= this.levelConfig.goal.seconds &&
+      this.map.base.alive
+    ) {
+      this.completeLevel();
+      return;
+    }
     this.effects.tick(dt);
     this.map.tick(this.reducedMotion ? 0 : this.time);
     this.ui.elapsed.textContent = `${String(Math.floor(this.time / 60)).padStart(2, "0")}:${String(Math.floor(this.time % 60)).padStart(2, "0")}`;
@@ -1484,13 +1588,10 @@ export class GameManager {
       h = this.container.clientHeight;
     this.renderer.setSize(w, h);
     this.neonRenderer?.resize(w, h);
-    const aspect = w / h;
-    const height = Math.max(28.5, 29.5 / aspect);
-    this.camera.left = (-height * aspect) / 2;
-    this.camera.right = (height * aspect) / 2;
-    this.camera.top = height / 2;
-    this.camera.bottom = -height / 2;
-    this.camera.updateProjectionMatrix();
+    fitArena(this.camera, w, h);
+  }
+  empAvailable() {
+    return this.mode === "endless" || this.levelConfig?.abilities?.emp === true;
   }
   activateEMP() {
     this.audio.unlock();
@@ -1500,7 +1601,7 @@ export class GameManager {
   }
   syncEMP() {
     if (!this.empButton) return;
-    const available = this.mode === "endless";
+    const available = this.empAvailable();
     const ready =
       available &&
       this.state === "playing" &&
@@ -1510,14 +1611,14 @@ export class GameManager {
     if (this.touchEMP) {
       this.touchEMP.disabled = !ready;
       this.touchEMP.textContent = !available
-        ? "EMP · 无尽"
+        ? "EMP · 第5关"
         : this.empCooldownLeft > 0
           ? `EMP ${Math.ceil(this.empCooldownLeft)}s`
           : "EMP 就绪";
     }
     this.empButton.dataset.ready = String(!!ready);
     const label = !available
-      ? "无尽模式解锁 · 范围 4 格"
+      ? "第 5 关 / 无尽解锁 · 范围 4 格"
       : this.empCooldownLeft > 0
         ? `充能 ${Math.ceil(this.empCooldownLeft)}s / ${EMP.cooldown}s`
         : "清除近身敌弹 · 干扰敌军 2 秒";
@@ -1556,6 +1657,7 @@ export class GameManager {
     this.camera.position.z = this.cameraBase.z + shake.z;
     this._updateTouchAimLine();
     this.syncEMP();
+    this.combatView?.sync();
     this.neonRenderer.render();
     this.camera.position.x = this.cameraBase.x;
     this.camera.position.z = this.cameraBase.z;
@@ -1684,10 +1786,8 @@ export class GameManager {
       this.mode === "endless" && this.wave > 0
         ? computeEffectiveScaling(this.difficulty, this.wave)
         : {
-            speedMul:
-              (this.levelConfig?.speedMultiplier ?? 1) * tier.enemySpeedMul,
-            fireMul:
-              (this.levelConfig?.fireMultiplier ?? 1) * tier.enemyFireMul,
+            speedMul: this.levelConfig?.speedMultiplier ?? 1,
+            fireMul: this.levelConfig?.fireMultiplier ?? 1,
           };
     const ratio = scaling.speedMul / Math.max(0.01, scaling.fireMul);
     const badge = ratio >= 1.35 ? "intense" : ratio >= 1.1 ? "hot" : "calm";

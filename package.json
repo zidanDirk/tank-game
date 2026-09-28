@@ -11,6 +11,7 @@
     "test:browser": "node tests/browser-check.mjs",
     "test:levels": "node tests/levels-check.mjs",
     "test:upgrades": "node tests/upgrades-check.mjs",
+    "test:battle-deck": "node tests/battle-deck-check.mjs",
     "test:neon": "node tests/neon-check.mjs",
     "format": "prettier --write src tests index.html vite.config.js",
     "loop:init": "node scripts/loop/orchestrator.mjs init",

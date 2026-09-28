@@ -90,6 +90,7 @@ run_browser() {
   (cd "$log_dir/evidence"; node "$repo_dir/tests/levels-check.mjs") || return 1
   (cd "$log_dir/evidence"; node "$repo_dir/tests/upgrades-check.mjs") || return 1
   (cd "$log_dir/evidence"; node "$repo_dir/tests/neon-check.mjs") || return 1
+  (cd "$log_dir/evidence"; node "$repo_dir/tests/battle-deck-check.mjs") || return 1
   for browser_test in "$repo_dir"/tests/acceptance-issue-*.browser.mjs; do
     [[ -f "$browser_test" ]] || continue
     (cd "$log_dir/evidence"; node "$browser_test") || return 1
