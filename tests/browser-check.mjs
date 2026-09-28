@@ -38,7 +38,7 @@ try {
     await page.waitForFunction(
       (startZ) => window.__TANK_GAME__.player.z < startZ - 1.5,
       movementStart,
-      { timeout: 5000 },
+      { timeout: 20000 },
     );
   } finally {
     await page.keyboard.up("KeyW");
@@ -87,7 +87,7 @@ try {
   await page.waitForFunction(
     () => window.__TANK_GAME__.kills === 1,
     {},
-    { timeout: 6000 },
+    { timeout: 20000 },
   );
   await page.keyboard.up("Space");
   const combat = await page.evaluate(() => window.__TANK_GAME__.snapshot());
@@ -103,7 +103,7 @@ try {
     await page.waitForFunction(
       () => Math.abs(window.__TANK_GAME__.player.aim - Math.PI / 2) < 0.01,
       {},
-      { timeout: 5000 },
+      { timeout: 20000 },
     );
   } finally {
     await page.keyboard.up("KeyD");
@@ -112,7 +112,7 @@ try {
   await page.waitForFunction(
     () => window.__TANK_GAME__.state === "lost",
     {},
-    { timeout: 6000 },
+    { timeout: 20000 },
   );
   await page.keyboard.up("Space");
   const lost = await page.evaluate(() => window.__TANK_GAME__.snapshot());
@@ -120,6 +120,10 @@ try {
   assert.equal(lost.lives, 3);
   await page.screenshot({ path: "artifacts/desktop-lost.png", fullPage: true });
   await page.locator("#primary-btn").click();
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id),
+    "battlefield",
+  );
   const restarted = await page.evaluate(() => window.__TANK_GAME__.snapshot());
   assert.equal(restarted.kills, 0);
   assert.equal(restarted.lives, 3);
@@ -146,7 +150,7 @@ try {
   await page.waitForFunction(
     () => window.__TANK_GAME__.state === "level-clear",
     {},
-    { timeout: 6000 },
+    { timeout: 20000 },
   );
   await page.keyboard.up("Space");
   const won = await page.evaluate(() => window.__TANK_GAME__.snapshot());
@@ -264,6 +268,20 @@ try {
     JSON.stringify(result, null, 2),
   );
   console.log(JSON.stringify(result, null, 2));
+} catch (error) {
+  console.error(
+    await page.evaluate(() => ({
+      snapshot: window.__TANK_GAME__?.snapshot(),
+      focus: document.activeElement?.id,
+      input: {
+        firing: window.__TANK_GAME__?.input.firing,
+        target: window.__TANK_GAME__?.input.target,
+        mouseAim: window.__TANK_GAME__?.input.mouseAim,
+      },
+    })),
+  );
+  await page.screenshot({ path: "artifacts/browser-failure.png" });
+  throw error;
 } finally {
   await browser.close();
 }

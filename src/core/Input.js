@@ -33,6 +33,13 @@ export class Input {
     this.touchAimTimer = null;
     this.onAimStart = null;
     window.addEventListener("keydown", (e) => {
+      if (document.querySelector("dialog[open]")) return;
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("button") &&
+        ["Space", "Enter"].includes(e.code)
+      )
+        return;
       if (
         e.target instanceof HTMLElement &&
         e.target.matches("input,textarea,select")
@@ -50,7 +57,7 @@ export class Input {
         game.togglePause();
       if (!e.repeat && e.code === "KeyR") game.restart();
       if (!e.repeat && e.code === "Enter" && game.state === "ready")
-        game.start();
+        game.mode === "endless" ? game.startEndless() : game.start();
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);

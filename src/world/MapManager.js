@@ -49,7 +49,60 @@ export class MapManager {
       return;
     }
 
-    if (this.level === "crossfire") {
+    if (
+      ["reflect", "sniper", "commander", "siege", "survival", "core"].includes(
+        this.level,
+      )
+    ) {
+      if (this.level === "reflect") {
+        for (const x of [5, 19]) {
+          steel(x, 5, 1, 6);
+          steel(x, 14, 1, 6);
+        }
+        steel(11, 9, 4, 1);
+        steel(11, 16, 4, 1);
+        for (const x of [2, 8, 16, 22]) brick(x, 12, 2, 2);
+      } else if (this.level === "sniper") {
+        for (const z of [6, 12, 18]) {
+          for (const x of [4, 10, 17, 22]) brick(x, z, 2, 1);
+        }
+        steel(7, 9, 2, 1);
+        steel(18, 15, 2, 1);
+        water(12, 10, 2, 5);
+      } else if (this.level === "commander") {
+        for (const x of [4, 20]) {
+          steel(x, 7, 2, 3);
+          brick(x, 16, 2, 2);
+        }
+        brick(10, 14, 2, 1);
+        brick(15, 14, 2, 1);
+      } else if (this.level === "siege") {
+        water(11, 5, 4, 5);
+        water(11, 14, 4, 5);
+        for (const z of [7, 15]) {
+          brick(4, z, 3, 2);
+          brick(19, z, 3, 2);
+        }
+        steel(7, 11, 2, 1);
+        steel(17, 11, 2, 1);
+      } else if (this.level === "survival") {
+        for (const x of [5, 18]) {
+          steel(x, 8, 3, 1);
+          steel(x, 16, 3, 1);
+        }
+        brick(11, 11, 4, 2);
+        brick(3, 20, 3, 1);
+        brick(20, 20, 3, 1);
+      } else {
+        for (const x of [4, 20]) {
+          steel(x, 6, 2, 2);
+          steel(x, 16, 2, 2);
+        }
+        brick(8, 12, 2, 2);
+        brick(16, 12, 2, 2);
+        water(11, 7, 4, 2);
+      }
+    } else if (this.level === "crossfire") {
       for (const x of [2, 6, 16, 20, 23]) {
         brick(x, 4, x === 23 ? 1 : 2, 3);
         brick(x, 16, x === 23 ? 1 : 2, 3);

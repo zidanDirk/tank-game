@@ -32,6 +32,25 @@
           <span>NEON DEFENSE DIVISION</span><span>霓虹防线 · 核心守卫</span>
         </div>
         <div class="header-actions">
+          <button
+            id="restart-btn"
+            class="deck-button"
+            type="button"
+            title="重新部署 (R)"
+          >
+            重开
+          </button>
+          <button id="tactics-btn" class="deck-button" type="button">
+            战术信息
+          </button>
+          <button
+            id="fullscreen-btn"
+            class="deck-button"
+            type="button"
+            aria-pressed="false"
+          >
+            全屏
+          </button>
           <span class="system-online"><i></i> SYSTEM ONLINE</span>
           <button
             id="sound-btn"
@@ -80,6 +99,11 @@
                 <span class="operation-cross">✳</span><strong>前线阵地</strong
                 ><span>INDUSTRIAL SECTOR</span>
               </div>
+              <div class="combat-hud" aria-label="战斗状态">
+                <span id="hud-lives">♥ 3</span
+                ><span id="hud-base">核心在线</span
+                ><span id="hud-score">000000 分</span>
+              </div>
               <div class="operation-status">
                 <span class="live-dot"></span><span id="status-label">待命</span
                 ><span class="bar-divider"></span
@@ -87,6 +111,12 @@
               </div>
             </div>
             <div class="field-wrap">
+              <div class="objective-hud">
+                <span id="hud-objective"></span
+                ><button id="hud-emp" type="button" disabled>
+                  Q · 第 5 关解锁
+                </button>
+              </div>
               <div class="field-coordinate coordinate-top">
                 N <span>↑</span>
               </div>
@@ -158,7 +188,7 @@
                       aria-pressed="true"
                     >
                       战役模式
-                      <small>3 关 · 经典剧情</small>
+                      <small>9 关 · 三章战役</small>
                     </button>
                     <button
                       id="mode-endless"
@@ -187,6 +217,11 @@
                     role="group"
                     aria-label="选择一项战地改装"
                     hidden
+                  ></div>
+                  <div
+                    id="campaign-select"
+                    class="campaign-select"
+                    aria-label="战役选关"
                   ></div>
                   <ol id="leaderboard" class="leaderboard" hidden></ol>
                   <button id="primary-btn" class="primary-button">
@@ -360,9 +395,14 @@
                 >
               </p>
             </div>
-            <button id="restart-btn" class="restart-button">
-              <span>↻</span> 重新部署 <small>RESTART</small>
-            </button>
+            <section class="tactical-guide">
+              <h3>战术识别</h3>
+              <p>粉色射线：狙击锁定 0.8 秒，横移或 EMP 打断。</p>
+              <p>橙色前装甲：减伤 50%；紫色后部与侧翼承受全额伤害。</p>
+              <p>
+                Boss：橙色扇线后发射；半血追加直线冲锋，停下后有 1.4 秒恢复期。
+              </p>
+            </section>
           </aside>
         </div>
       </main>
@@ -376,6 +416,18 @@
         ></span>
       </footer>
     </div>
+    <dialog id="tactics-dialog" aria-labelledby="tactics-title">
+      <div class="tactics-heading">
+        <h2 id="tactics-title">战术信息</h2>
+        <button id="tactics-close" class="deck-button" type="button">
+          关闭
+        </button>
+      </div>
+      <div class="tactics-content"></div>
+      <button id="campaign-menu-btn" class="deck-button" type="button">
+        结束当前挑战并返回选关
+      </button>
+    </dialog>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

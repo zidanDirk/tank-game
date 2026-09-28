@@ -8,7 +8,7 @@ export const EMP = Object.freeze({
 export function activateEMP(game) {
   const player = game.player;
   if (
-    game.mode !== "endless" ||
+    !(game.empAvailable?.() ?? game.mode === "endless") ||
     game.state !== "playing" ||
     !player?.alive ||
     game.empCooldownLeft > 0
@@ -22,6 +22,7 @@ export function activateEMP(game) {
       Math.hypot(enemy.x - player.x, enemy.z - player.z) > EMP.radius
     )
       continue;
+    enemy.interruptAttack?.();
     const duration = enemy.type === "boss" ? EMP.bossStun : EMP.stun;
     enemy.frozenUntil = Math.max(enemy.frozenUntil ?? 0, game.time + duration);
   }

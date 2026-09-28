@@ -21,17 +21,17 @@ export class BulletManager {
     });
     this.maxBullets = 32;
   }
-  fire(tank, lateral = 0) {
+  fire(tank, lateral = 0, angleOffset = 0) {
     if (this.items.length >= this.maxBullets) {
       const old = this.items.shift();
       this.disposeTrail(old);
       old.mesh.removeFromParent();
     }
-    const vx = Math.sin(tank.aim),
-      vz = -Math.cos(tank.aim);
+    const vx = Math.sin(tank.aim + angleOffset),
+      vz = -Math.cos(tank.aim + angleOffset);
     const speed = 14 * (tank.bulletSpeedMultiplier ?? 1);
     const offsetX = vz * lateral;
-    const offsetZ = vx * lateral;
+    const offsetZ = -vx * lateral;
     const b = {
       x: tank.x + offsetX,
       z: tank.z + offsetZ,
@@ -129,7 +129,7 @@ export class BulletManager {
     }
     b.alive = false;
     this.disposeTrail(b);
-    if (hit.kind === "tank") hit.tank.hit(b.damage ?? 1);
+    if (hit.kind === "tank") hit.tank.hit(b.damage ?? 1, b);
     else if (hit.type === CELL.BRICK) {
       this.game.map.destroyBrick(hit.x, hit.z);
       this.game.effects.burst(b.x, 0.45, b.z, 0xc58457, 14);
